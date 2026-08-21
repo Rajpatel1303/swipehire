@@ -3,6 +3,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import multer from "multer";
+import nodemailer from "nodemailer";
 
 dotenv.config();
 
@@ -391,6 +392,162 @@ Respond ONLY in JSON:
           "How do you approach performance optimization and bundle sizing?",
         ],
       });
+    }
+  });
+
+  // SMTP Test Connection Endpoint
+  app.post("/api/email/test-smtp", async (req, res) => {
+    try {
+      const {
+        smtpHost,
+        smtpPort,
+        smtpSecure,
+        smtpUser,
+        smtpPassword,
+        senderName,
+        fromEmail,
+        testRecipientEmail,
+      } = req.body || {};
+
+      if (!smtpHost || !smtpPort || !smtpUser || !smtpPassword) {
+        return res.status(400).json({
+          success: false,
+          error: "Missing required SMTP credentials. Please provide Host, Port, Username, and Password.",
+        });
+      }
+
+      if (!testRecipientEmail || !testRecipientEmail.includes("@")) {
+        return res.status(400).json({
+          success: false,
+          error: "Please provide a valid test recipient email address.",
+        });
+      }
+
+      const portNum = Number(smtpPort) || 587;
+      const isSecure = smtpSecure === true || portNum === 465;
+
+      const transporter = nodemailer.createTransport({
+        host: smtpHost.trim(),
+        port: portNum,
+        secure: isSecure,
+        auth: {
+          user: smtpUser.trim(),
+          pass: smtpPassword.trim(),
+        },
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 15000,
+      });
+
+      // 1. Verify connection
+      await transporter.verify();
+
+      // 2. Send test verification email
+      const fromAddress = fromEmail
+        ? `"${senderName || "SwipeHired Recruiter"}" <${fromEmail.trim()}>`
+        : `"${senderName || "SwipeHired Recruiter"}" <${smtpUser.trim()}>`;
+
+      const info = await transporter.sendMail({
+        from: fromAddress,
+        to: testRecipientEmail.trim(),
+        subject: `⚡ SwipeHired SMTP Connection Test — Successful`,
+        text: `Hello,\n\nYour SMTP connection for SwipeHired has been successfully verified!\n\nHost: ${smtpHost}\nPort: ${portNum}\nSender: ${fromAddress}\nTimestamp: ${new Date().toUTCString()}\n\nYou can now send candidate interview invitations and outreach directly from your company domain.\n\nBest regards,\nSwipeHired Engineering Team`,
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border: 2px solid #0f172a; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
+            <div style="background: #0f172a; color: #ffffff; padding: 24px 30px; text-align: center;">
+              <h1 style="margin: 0; font-size: 20px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase;">⚡ SwipeHired SMTP Connection Test</h1>
+            </div>
+            <div style="padding: 30px; color: #334155; line-height: 1.6;">
+              <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 12px; padding: 16px; margin-bottom: 20px; color: #065f46; font-weight: bold; font-size: 14px;">
+                ✓ SMTP Connection Verified Successfully!
+              </div>
+              <p style="font-size: 14px; margin-top: 0;">Hello,</p>
+              <p style="font-size: 14px;">This is a confirmation that your custom SMTP server has been connected to <strong>SwipeHired</strong>.</p>
+              
+              <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin: 20px 0; font-size: 13px;">
+                <p style="margin: 4px 0;"><strong>SMTP Server:</strong> ${smtpHost}:${portNum}</p>
+                <p style="margin: 4px 0;"><strong>Sender Identity:</strong> ${fromAddress}</p>
+                <p style="margin: 4px 0;"><strong>Security Mode:</strong> ${isSecure ? "SSL/TLS (Encrypted)" : "STARTTLS / Standard"}</p>
+                <p style="margin: 4px 0;"><strong>Delivered To:</strong> ${testRecipientEmail}</p>
+                <p style="margin: 4px 0;"><strong>Verified At:</strong> ${new Date().toLocaleString()}</p>
+              </div>
+
+              <p style="font-size: 13px; color: #64748b;">You are now ready to send automated interview invitations, shortlist announcements, and offer letters directly to candidates.</p>
+            </div>
+            <div style="background: #f1f5f9; padding: 16px 30px; text-align: center; font-size: 11px; color: #94a3b8;">
+              SwipeHired AI-Powered Talent Platform
+            </div>
+          </div>
+        `,
+      });
+
+      return res.json({
+        success: true,
+        messageId: info.messageId,
+        message: `Test email delivered successfully to ${testRecipientEmail}!`,
+      });
+    } catch (err: any) {
+      console.error("[SMTP Test Error]:", err);
+      let userFriendlyError = err.message || "Failed to connect to SMTP server.";
+
+      if (err.code === "EAUTH" || err.responseCode === 535) {
+        userFriendlyError = "Authentication Failed: Invalid username or password. If you are using Gmail, please use an 'App Password' generated from your Google Account Security settings instead of your normal password.";
+      } else if (err.code === "ESOCKET" || err.code === "ECONNECTION" || err.code === "ETIMEDOUT") {
+        userFriendlyError = `Connection Failed: Could not reach the SMTP server at ${req.body?.smtpHost}:${req.body?.smtpPort}. Please check the server host name, port, and firewall rules.`;
+      } else if (err.code === "EENVELOPE") {
+        userFriendlyError = "Invalid Sender/Recipient: The from email or recipient email address was rejected by the SMTP server.";
+      }
+
+      return res.status(400).json({
+        success: false,
+        error: userFriendlyError,
+        errorCode: err.code || "SMTP_ERROR",
+      });
+    }
+  });
+
+  // Direct Candidate Email Dispatch Endpoint
+  app.post("/api/email/send", async (req, res) => {
+    try {
+      const { smtpConfig, to, subject, body, html } = req.body || {};
+
+      if (!to) {
+        return res.status(400).json({ success: false, error: "Recipient email is required." });
+      }
+
+      if (smtpConfig && smtpConfig.smtpHost && smtpConfig.smtpUser && smtpConfig.smtpPassword) {
+        const portNum = Number(smtpConfig.smtpPort) || 587;
+        const isSecure = smtpConfig.smtpSecure === true || portNum === 465;
+
+        const transporter = nodemailer.createTransport({
+          host: smtpConfig.smtpHost.trim(),
+          port: portNum,
+          secure: isSecure,
+          auth: {
+            user: smtpConfig.smtpUser.trim(),
+            pass: smtpConfig.smtpPassword.trim(),
+          },
+        });
+
+        const fromAddress = smtpConfig.fromEmail
+          ? `"${smtpConfig.senderName || "Recruiting"}" <${smtpConfig.fromEmail.trim()}>`
+          : `"${smtpConfig.senderName || "Recruiting"}" <${smtpConfig.smtpUser.trim()}>`;
+
+        await transporter.sendMail({
+          from: fromAddress,
+          to: to.trim(),
+          subject: subject || "Message from Hiring Team",
+          text: body || "",
+          html: html || `<div style="font-family: sans-serif; white-space: pre-wrap; line-height: 1.6;">${body}</div>`,
+        });
+
+        return res.json({ success: true, message: `Email sent to ${to}` });
+      }
+
+      return res.json({ success: true, message: `Email simulated and logged for ${to}` });
+    } catch (err: any) {
+      console.error("[Send Email Error]:", err);
+      return res.status(400).json({ success: false, error: err.message || "Failed to dispatch email." });
     }
   });
 

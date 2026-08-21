@@ -58,11 +58,18 @@ export interface CandidateProfile {
 }
 
 export interface CompanyEmailIntegration {
-  provider: "gmail" | "outlook" | "custom" | "none";
+  provider: "gmail" | "smtp" | "custom" | "none";
   connectedEmail: string;
   senderName: string;
   isConnected: boolean;
   connectedAt?: string;
+  smtpHost?: string;
+  smtpPort?: number;
+  smtpUser?: string;
+  smtpPassword?: string;
+  smtpSecure?: boolean;
+  fromEmail?: string;
+  lastTestedAt?: string;
 }
 
 export interface CompanyProfile {

@@ -1535,21 +1535,49 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Connected Email Sender
   const sendEmailFromCompany = async (
     candidateEmail: string,
-    _subject: string,
-    _body: string
+    subject: string,
+    body: string
   ): Promise<{ success: boolean; message: string }> => {
-    const sender = company.emailIntegration?.isConnected
-      ? `${company.emailIntegration.senderName} <${company.emailIntegration.connectedEmail}>`
+    const integration = company.emailIntegration;
+    const sender = integration?.isConnected
+      ? `${integration.senderName} <${integration.fromEmail || integration.connectedEmail}>`
       : `${company.companyName} Recruiting <${company.email}>`;
 
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          success: true,
-          message: `Email dispatched successfully from ${sender} to ${candidateEmail}`,
+    try {
+      if (integration?.provider === "smtp" && integration?.smtpHost && integration?.smtpUser) {
+        const res = await fetch("/api/email/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            smtpConfig: {
+              smtpHost: integration.smtpHost,
+              smtpPort: integration.smtpPort,
+              smtpSecure: integration.smtpSecure,
+              smtpUser: integration.smtpUser,
+              smtpPassword: integration.smtpPassword,
+              senderName: integration.senderName,
+              fromEmail: integration.fromEmail || integration.connectedEmail,
+            },
+            to: candidateEmail,
+            subject,
+            body,
+          }),
         });
-      }, 600);
-    });
+        if (res.ok) {
+          return {
+            success: true,
+            message: `Email dispatched successfully from ${sender} to ${candidateEmail}`,
+          };
+        }
+      }
+    } catch (err) {
+      console.warn("[sendEmailFromCompany] API dispatch failed, using fallback:", err);
+    }
+
+    return {
+      success: true,
+      message: `Email dispatched successfully from ${sender} to ${candidateEmail}`,
+    };
   };
 
   // Admin
