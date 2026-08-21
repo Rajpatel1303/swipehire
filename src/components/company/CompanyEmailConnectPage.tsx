@@ -17,6 +17,7 @@ import {
   Info,
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
+import { DEFAULT_EMAIL_TEMPLATES } from "../../services/defaultTemplates";
 
 export const CompanyEmailConnectPage: React.FC = () => {
   const { company, updateCompany, emailTemplates, updateEmailTemplate, triggerCelebration } = useApp();
@@ -37,7 +38,7 @@ export const CompanyEmailConnectPage: React.FC = () => {
   const [smtpUser, setSmtpUser] = useState(currentIntegration.smtpUser || currentIntegration.connectedEmail || company.email || "");
   const [smtpPassword, setSmtpPassword] = useState(currentIntegration.smtpPassword || "");
   const [senderName, setSenderName] = useState(currentIntegration.senderName || `${company.companyName || "Company"} Recruiting Team`);
-  const [fromEmail, setFromEmail] = useState(currentIntegration.fromEmail || currentIntegration.connectedEmail || company.email || "");
+  const [fromEmail, setFromEmail] = useState(currentIntegration.fromEmail || currentIntegration.smtpUser || currentIntegration.connectedEmail || company.email || "");
   const [showPassword, setShowPassword] = useState(false);
 
   // Edit mode vs active view
@@ -58,23 +59,36 @@ export const CompanyEmailConnectPage: React.FC = () => {
 
   const activeTemplate =
     emailTemplates.find((t) => t.category === selectedTemplateCategory) ||
-    emailTemplates[0] || {
-      id: "tmpl_default",
-      title: "Interview Invitation",
-      category: "interview",
-      subject: "Interview Invitation: {{job_title}} @ {{company_name}}",
-      bodyTemplate: "Hi {{candidate_name}},\n\nWe would love to invite you for an interview.",
-    };
+    DEFAULT_EMAIL_TEMPLATES.find((t) => t.category === selectedTemplateCategory) ||
+    DEFAULT_EMAIL_TEMPLATES[0];
 
   const [currentSubject, setCurrentSubject] = useState(activeTemplate.subject);
   const [currentBody, setCurrentBody] = useState(activeTemplate.bodyTemplate);
 
   const handleCategorySelect = (category: "interview" | "shortlisted" | "received" | "rejection") => {
     setSelectedTemplateCategory(category);
-    const tmpl = emailTemplates.find((t) => t.category === category);
+    const tmpl =
+      emailTemplates.find((t) => t.category === category) ||
+      DEFAULT_EMAIL_TEMPLATES.find((t) => t.category === category);
     if (tmpl) {
       setCurrentSubject(tmpl.subject);
       setCurrentBody(tmpl.bodyTemplate);
+    }
+  };
+
+  const handleResetToDefault = () => {
+    const defaultTmpl = DEFAULT_EMAIL_TEMPLATES.find((t) => t.category === selectedTemplateCategory);
+    if (defaultTmpl) {
+      setCurrentSubject(defaultTmpl.subject);
+      setCurrentBody(defaultTmpl.bodyTemplate);
+      if (activeTemplate) {
+        updateEmailTemplate(activeTemplate.id, {
+          subject: defaultTmpl.subject,
+          bodyTemplate: defaultTmpl.bodyTemplate,
+        });
+      }
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 2000);
     }
   };
 
@@ -689,10 +703,19 @@ export const CompanyEmailConnectPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="pt-4 border-t border-slate-100 flex items-center justify-end">
+          <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={handleResetToDefault}
+              className="text-xs font-black uppercase tracking-wider text-slate-500 hover:text-slate-900 cursor-pointer flex items-center gap-1.5"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Reset to Prebuilt Template</span>
+            </button>
+
             <button
               type="submit"
-              className="flex items-center gap-2 px-6 py-3 bg-sky-600 hover:bg-sky-700 text-white rounded-full font-black text-xs uppercase tracking-widest shadow-md shadow-sky-600/25 cursor-pointer"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-sky-600 hover:bg-sky-700 text-white rounded-full font-black text-xs uppercase tracking-widest shadow-md shadow-sky-600/25 cursor-pointer"
             >
               <Save className="w-4 h-4" />
               <span>Save Template Changes</span>

@@ -23,6 +23,7 @@ import { GeminiService } from "../services/geminiService";
 import { SupabaseService } from "../services/supabaseService";
 import { supabase } from "../services/supabaseClient";
 import { calculateJobMatch } from "../utils/matchingEngine";
+import { DEFAULT_EMAIL_TEMPLATES, DEFAULT_WHATSAPP_TEMPLATES } from "../services/defaultTemplates";
 
 export const emptyCandidateProfile: CandidateProfile = {
   id: "",
@@ -378,8 +379,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   });
 
   // Templates
-  const [emailTemplates, setEmailTemplates] = useState<EmailTemplate[]>([]);
-  const [whatsAppTemplates, setWhatsAppTemplates] = useState<WhatsAppTemplate[]>([]);
+  const [emailTemplates, setEmailTemplates] = useState<EmailTemplate[]>(DEFAULT_EMAIL_TEMPLATES);
+  const [whatsAppTemplates, setWhatsAppTemplates] = useState<WhatsAppTemplate[]>(DEFAULT_WHATSAPP_TEMPLATES);
   const [adminReports, setAdminReports] = useState<AdminReport[]>([]);
 
   // Hydrate state from Supabase on mount
@@ -446,8 +447,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setCompanySLAs(dbSlas || {});
         setNotifications(dbNotifs || []);
         setAdminReports(dbReports || []);
-        setEmailTemplates(dbEmailTmpl || []);
-        setWhatsAppTemplates(dbWaTmpl || []);
+        setEmailTemplates(dbEmailTmpl && dbEmailTmpl.length > 0 ? dbEmailTmpl : DEFAULT_EMAIL_TEMPLATES);
+        setWhatsAppTemplates(dbWaTmpl && dbWaTmpl.length > 0 ? dbWaTmpl : DEFAULT_WHATSAPP_TEMPLATES);
       }
     } catch (err) {
       console.warn("Supabase initial sync notice:", err);
