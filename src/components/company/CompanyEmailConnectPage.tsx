@@ -78,6 +78,14 @@ export const CompanyEmailConnectPage: React.FC = () => {
     }
   };
 
+  const handleUserChange = (val: string) => {
+    const prev = smtpUser;
+    setSmtpUser(val);
+    if (!fromEmail || fromEmail === prev || fromEmail === company.email) {
+      setFromEmail(val);
+    }
+  };
+
   const applyPreset = (preset: "gmail" | "sendgrid" | "mailgun" | "ses") => {
     if (preset === "gmail") {
       setSmtpHost("smtp.gmail.com");
@@ -110,6 +118,14 @@ export const CompanyEmailConnectPage: React.FC = () => {
       },
     });
     triggerCelebration();
+  };
+
+  const openTestModal = () => {
+    setTestRecipient(fromEmail || smtpUser || company.email || "");
+    setTestStage("idle");
+    setTestErrorMessage("");
+    setTestSuccessMessage("");
+    setShowTestModal(true);
   };
 
   const runSmtpTest = async (e: React.FormEvent) => {
@@ -500,9 +516,10 @@ export const CompanyEmailConnectPage: React.FC = () => {
                     required
                     placeholder="e.g. careers@company.com"
                     value={smtpUser}
-                    onChange={(e) => setSmtpUser(e.target.value)}
+                    onChange={(e) => handleUserChange(e.target.value)}
                     className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-2xl text-xs text-slate-900 font-bold focus:border-slate-900 focus:outline-none"
                   />
+                  <p className="text-[10px] text-slate-400 font-medium mt-1">Your login email address for the mail server.</p>
                 </div>
 
                 <div>
@@ -526,6 +543,7 @@ export const CompanyEmailConnectPage: React.FC = () => {
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
+                  <p className="text-[10px] text-slate-400 font-medium mt-1">16-character Google App Password (or SMTP server password).</p>
                 </div>
 
                 <div>
@@ -552,6 +570,7 @@ export const CompanyEmailConnectPage: React.FC = () => {
                     onChange={(e) => setFromEmail(e.target.value)}
                     className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-2xl text-xs text-slate-900 font-bold focus:border-slate-900 focus:outline-none"
                   />
+                  <p className="text-[10px] text-slate-400 font-medium mt-1">For Gmail, this must match your SMTP Username.</p>
                 </div>
               </div>
 
@@ -568,10 +587,7 @@ export const CompanyEmailConnectPage: React.FC = () => {
 
                 <button
                   type="button"
-                  onClick={() => {
-                    setTestStage("idle");
-                    setShowTestModal(true);
-                  }}
+                  onClick={openTestModal}
                   className="w-full sm:w-auto px-8 py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-full font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg cursor-pointer"
                 >
                   <span>Test Connection & Save</span>
@@ -722,8 +738,10 @@ export const CompanyEmailConnectPage: React.FC = () => {
                   </div>
 
                   <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 text-xs text-emerald-900 text-left space-y-1">
-                    <p className="font-bold">✓ Credentials Authenticated</p>
-                    <p className="text-[11px] text-emerald-800">Your company SMTP integration is now active and ready to send candidate outreach.</p>
+                    <p className="font-bold">✓ Real Email Dispatched</p>
+                    <p className="text-[11px] text-emerald-800">
+                      The test message was successfully accepted and transmitted by <strong>{smtpHost}</strong> to <strong>{testRecipient}</strong>. Please check your inbox (and spam folder).
+                    </p>
                   </div>
 
                   <button
@@ -736,6 +754,22 @@ export const CompanyEmailConnectPage: React.FC = () => {
               ) : (
                 /* Test Execution Form */
                 <form onSubmit={runSmtpTest} className="space-y-4">
+                  {/* Connection Summary Details */}
+                  <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-1.5">
+                    <div className="flex items-center justify-between text-slate-700 font-bold">
+                      <span>Server:</span>
+                      <span className="font-mono text-slate-900">{smtpHost}:{smtpPort}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-slate-700 font-bold">
+                      <span>Login User:</span>
+                      <span className="font-mono text-slate-900 truncate max-w-[240px]">{smtpUser}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-slate-700 font-bold">
+                      <span>Sender Identity:</span>
+                      <span className="font-mono text-slate-900 truncate max-w-[240px]">{fromEmail || smtpUser}</span>
+                    </div>
+                  </div>
+
                   <div>
                     <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1.5">
                       Send Test Email To:
@@ -750,7 +784,7 @@ export const CompanyEmailConnectPage: React.FC = () => {
                       className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-2xl text-xs text-slate-900 font-bold focus:border-slate-900 focus:outline-none"
                     />
                     <p className="text-[11px] text-slate-500 font-medium mt-1">
-                      A verification email will be dispatched from <strong>{fromEmail || smtpUser}</strong> via <strong>{smtpHost}:{smtpPort}</strong>.
+                      Enter any email address where you want to receive the verification email.
                     </p>
                   </div>
 
@@ -760,12 +794,12 @@ export const CompanyEmailConnectPage: React.FC = () => {
                       <div className="flex items-center justify-between text-xs font-black uppercase tracking-wider text-slate-800">
                         <span className="flex items-center gap-2">
                           <RefreshCw className="w-3.5 h-3.5 text-sky-600 animate-spin" />
-                          <span>Testing SMTP Pipeline...</span>
+                          <span>Connecting Outbound SMTP...</span>
                         </span>
                         <span className="text-sky-600">
-                          {testStage === "connecting" && "1 / 3 Connecting"}
+                          {testStage === "connecting" && "1 / 3 Handshake"}
                           {testStage === "authenticating" && "2 / 3 Authenticating"}
-                          {testStage === "sending" && "3 / 3 Sending Message"}
+                          {testStage === "sending" && "3 / 3 Transmitting"}
                         </span>
                       </div>
 
@@ -785,9 +819,9 @@ export const CompanyEmailConnectPage: React.FC = () => {
                       </div>
 
                       <p className="text-[11px] text-slate-500 font-medium text-center">
-                        {testStage === "connecting" && `Connecting to ${smtpHost}:${smtpPort}...`}
-                        {testStage === "authenticating" && `Verifying authentication for ${smtpUser}...`}
-                        {testStage === "sending" && `Sending verification email to ${testRecipient}...`}
+                        {testStage === "connecting" && `Connecting socket to ${smtpHost}:${smtpPort}...`}
+                        {testStage === "authenticating" && `Authenticating ${smtpUser}...`}
+                        {testStage === "sending" && `Sending message payload to ${testRecipient}...`}
                       </p>
                     </div>
                   )}
