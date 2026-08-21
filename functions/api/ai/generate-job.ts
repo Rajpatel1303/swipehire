@@ -1,3 +1,12 @@
+type PagesFunction<Env = any> = (context: {
+  request: Request;
+  env: Env;
+  params: Record<string, string | string[]>;
+  waitUntil: (promise: Promise<any>) => void;
+  next: (input?: Request | string, init?: RequestInit) => Promise<Response>;
+  data: Record<string, any>;
+}) => Promise<Response>;
+
 export const onRequestPost: PagesFunction<{ EDENAI_API_KEY?: string }> = async (context) => {
   try {
     const body = (await context.request.json()) as any;
@@ -16,7 +25,7 @@ export const onRequestPost: PagesFunction<{ EDENAI_API_KEY?: string }> = async (
             experience: "2–4 Years",
             salary: "?7–10 LPA",
             openings: 2,
-            description: Join  to build next-generation web applications.,
+            description: `Join ${companyName || "our team"} to build next-generation web applications.`,
             responsibilities: [
               "Architect and maintain scalable frontend interfaces using React and TypeScript.",
               "Design high-throughput RESTful APIs in Node.js.",
@@ -33,10 +42,10 @@ export const onRequestPost: PagesFunction<{ EDENAI_API_KEY?: string }> = async (
       );
     }
 
-    const prompt = You are SwipeHired's AI Job Architect powered by Eden AI. Generate a comprehensive, attractive job posting.
-Recruiter Brief: ""
-Company Name: ""
-Location: ""
+    const prompt = `You are SwipeHired's AI Job Architect powered by Eden AI. Generate a comprehensive, attractive job posting.
+Recruiter Brief: "${userPrompt}"
+Company Name: "${companyName || "InnovateTech"}"
+Location: "${companyLocation || "Ahmedabad, India"}"
 
 Respond strictly in JSON matching:
 {
@@ -52,12 +61,12 @@ Respond strictly in JSON matching:
   "requirements": ["Requirement 1", "Requirement 2", "Requirement 3"],
   "requiredSkills": ["Skill 1", "Skill 2", "Skill 3"],
   "preferredSkills": ["Skill 1", "Skill 2"]
-};
+}`;
 
     const edenRes = await fetch("https://api.edenai.run/v2/text/chat", {
       method: "POST",
       headers: {
-        Authorization: Bearer ,
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -68,12 +77,12 @@ Respond strictly in JSON matching:
     });
 
     if (!edenRes.ok) {
-      throw new Error(Eden AI chat status );
+      throw new Error(`Eden AI chat status ${edenRes.status}`);
     }
 
     const json = (await edenRes.json()) as any;
     const rawText = json?.openai?.generated_text || "";
-    const cleaned = rawText.replace(/`json\n?/gi, "").replace(/`\n?/g, "").trim();
+    const cleaned = rawText.replace(/```json\n?/gi, "").replace(/```\n?/g, "").trim();
     const job = JSON.parse(cleaned);
 
     return new Response(JSON.stringify({ success: true, job }), {
