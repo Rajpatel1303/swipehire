@@ -1,0 +1,6 @@
+{
+  "name": "SwipeHired",
+  "description": "AI-powered hiring and talent marketplace with interactive career radar swiping, candidate comparison arena, AI interview scorecard kits, and offer letter generation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
