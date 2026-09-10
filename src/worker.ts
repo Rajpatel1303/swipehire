@@ -1,4 +1,4 @@
-﻿import { connect } from "cloudflare:sockets";
+import { connect } from "cloudflare:sockets";
 
 export interface Env {
   ASSETS: {

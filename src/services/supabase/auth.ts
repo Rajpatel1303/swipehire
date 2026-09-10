@@ -154,6 +154,56 @@ export class AuthService {
   }
 
   /**
+   * Helper to retrieve OAuth role intent from all available client vectors
+   */
+  static getSavedOAuthRole(): "candidate" | "company" | null {
+    if (typeof window === "undefined") return null;
+
+    try {
+      // 1. URL search params
+      const searchParams = new URLSearchParams(window.location.search);
+      const urlRole = searchParams.get("oauth_role");
+      if (urlRole === "candidate" || urlRole === "company") return urlRole;
+
+      // 2. URL hash params (e.g. #oauth_role=company&access_token=...)
+      if (window.location.hash) {
+        const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, "?"));
+        const hashRole = hashParams.get("oauth_role");
+        if (hashRole === "candidate" || hashRole === "company") return hashRole;
+      }
+
+      // 3. sessionStorage
+      const sessionRole = sessionStorage.getItem("swipehired_oauth_role");
+      if (sessionRole === "candidate" || sessionRole === "company") return sessionRole;
+
+      // 4. localStorage
+      const localRole = localStorage.getItem("swipehired_oauth_role");
+      if (localRole === "candidate" || localRole === "company") return localRole;
+
+      // 5. Document cookie fallback
+      const match = document.cookie.match(/(?:^|;\s*)swipehired_oauth_role=([^;]+)/);
+      if (match && (match[1] === "candidate" || match[1] === "company")) {
+        return match[1] as "candidate" | "company";
+      }
+    } catch (e) {
+      console.warn("Could not retrieve saved OAuth role:", e);
+    }
+    return null;
+  }
+
+  /**
+   * Helper to clean up transient OAuth role intent keys
+   */
+  static clearSavedOAuthRole(): void {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.removeItem("swipehired_oauth_role");
+      sessionStorage.removeItem("swipehired_oauth_role");
+      document.cookie = "swipehired_oauth_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;";
+    } catch {}
+  }
+
+  /**
    * Supabase Auth: Sign In / Sign Up with Google OAuth
    */
   static async signInWithGoogle(
@@ -162,11 +212,13 @@ export class AuthService {
     try {
       if (typeof window !== "undefined") {
         localStorage.setItem("swipehired_oauth_role", role);
+        sessionStorage.setItem("swipehired_oauth_role", role);
+        document.cookie = `swipehired_oauth_role=${role}; path=/; max-age=600; SameSite=Lax`;
       }
 
       const redirectTo =
         typeof window !== "undefined" && window.location
-          ? window.location.origin
+          ? `${window.location.origin}/?oauth_role=${role}`
           : undefined;
 
       const { error } = await supabase.auth.signInWithOAuth({
@@ -191,79 +243,122 @@ export class AuthService {
 
   /**
    * Supabase Auth: Fetch or Auto-Provision Profile from Supabase User
+   * Authoritative Source of Truth: public.profiles table
    */
   static async fetchUserProfile(
     user: any,
     roleHint?: "candidate" | "company" | "admin"
   ): Promise<{
-    role: "candidate" | "company" | "admin";
+    role: "candidate" | "company" | "admin" | null;
     candidateProfile: CandidateProfile | null;
     companyProfile: CompanyProfile | null;
   }> {
     let candidateProfile: CandidateProfile | null = null;
     let companyProfile: CompanyProfile | null = null;
-    let detectedRole: "candidate" | "company" | "admin" | null = roleHint || null;
+    let authoritativeRole: "candidate" | "company" | "admin" | null = null;
 
     try {
-      if (!detectedRole) {
-        let profileRows: any = null;
-        if (user.id) {
-          const res = await supabase.from("profiles").select("*").eq("id", user.id).limit(1);
-          profileRows = res.data;
-        }
-        if ((!profileRows || profileRows.length === 0) && user.email) {
-          const res = await supabase.from("profiles").select("*").eq("email", user.email).limit(1);
-          profileRows = res.data;
-        }
-
-        if (profileRows && profileRows.length > 0 && profileRows[0].role) {
-          detectedRole = profileRows[0].role as "candidate" | "company" | "admin";
-        }
-      }
-
-      let compData: any = null;
+      // 1. FIRST & FOREMOST: Query the authoritative public.profiles table
+      let profileRows: any = null;
       if (user.id) {
-        const res = await supabase.from("companies").select("*").eq("user_id", user.id).limit(1);
-        compData = res.data;
+        const res = await supabase.from("profiles").select("*").eq("id", user.id).limit(1);
+        profileRows = res.data;
       }
-      if ((!compData || compData.length === 0) && user.email) {
-        const res = await supabase.from("companies").select("*").eq("email", user.email).limit(1);
-        compData = res.data;
-      }
-
-      let candData: any = null;
-      if (user.id) {
-        const res = await supabase.from("candidates").select("*").eq("user_id", user.id).limit(1);
-        candData = res.data;
-      }
-      if ((!candData || candData.length === 0) && user.email) {
-        const res = await supabase.from("candidates").select("*").eq("email", user.email).limit(1);
-        candData = res.data;
+      if ((!profileRows || profileRows.length === 0) && user.email) {
+        const res = await supabase.from("profiles").select("*").eq("email", user.email.trim()).limit(1);
+        profileRows = res.data;
       }
 
-      if (!detectedRole) {
-        if (compData && compData.length > 0 && (!candData || candData.length === 0)) {
-          detectedRole = "company";
-        } else if (candData && candData.length > 0 && (!compData || compData.length === 0)) {
-          detectedRole = "candidate";
-        } else {
-          const metaRole = user?.user_metadata?.role || user?.app_metadata?.role;
-          if (metaRole === "company" || metaRole === "admin" || metaRole === "candidate") {
-            detectedRole = metaRole;
-          } else {
-            detectedRole = "candidate";
+      if (profileRows && profileRows.length > 0 && profileRows[0].role) {
+        authoritativeRole = profileRows[0].role as "candidate" | "company" | "admin";
+      }
+
+      // 2. If no profile exists yet in database (e.g., fresh Google OAuth login / signup)
+      if (!authoritativeRole) {
+        // Look in user metadata or multi-layered OAuth role intent
+        const metaRole = user?.user_metadata?.role || user?.app_metadata?.role;
+        const savedOauth = this.getSavedOAuthRole();
+
+        if (metaRole === "candidate" || metaRole === "company" || metaRole === "admin") {
+          authoritativeRole = metaRole;
+        } else if (roleHint === "candidate" || roleHint === "company" || roleHint === "admin") {
+          authoritativeRole = roleHint;
+        } else if (savedOauth === "candidate" || savedOauth === "company") {
+          authoritativeRole = savedOauth;
+        }
+
+        // If a role was determined, persist it into public.profiles immediately
+        if (authoritativeRole && user.id) {
+          try {
+            await supabase.from("profiles").upsert({
+              id: user.id,
+              email: user.email ? user.email.trim() : "",
+              role: authoritativeRole,
+              updated_at: new Date().toISOString(),
+            });
+          } catch (profileInsertErr) {
+            console.warn("Could not upsert profile for new user:", profileInsertErr);
           }
         }
       }
 
-      const effectiveRole = detectedRole || "candidate";
+      // 3. Fallback check on existing domain tables if role is STILL unresolved
+      let compData: any = null;
+      let candData: any = null;
 
-      if (effectiveRole === "candidate") {
+      if (user.id) {
+        const compRes = await supabase.from("companies").select("*").eq("user_id", user.id).limit(1);
+        compData = compRes.data;
+        const candRes = await supabase.from("candidates").select("*").eq("user_id", user.id).limit(1);
+        candData = candRes.data;
+      }
+      if ((!compData || compData.length === 0) && user.email) {
+        const compRes = await supabase.from("companies").select("*").eq("email", user.email.trim()).limit(1);
+        compData = compRes.data;
+      }
+      if ((!candData || candData.length === 0) && user.email) {
+        const candRes = await supabase.from("candidates").select("*").eq("email", user.email.trim()).limit(1);
+        candData = candRes.data;
+      }
+
+      if (!authoritativeRole) {
+        if (compData && compData.length > 0 && (!candData || candData.length === 0)) {
+          authoritativeRole = "company";
+        } else if (candData && candData.length > 0 && (!compData || compData.length === 0)) {
+          authoritativeRole = "candidate";
+        }
+
+        // Persist the inferred role if found
+        if (authoritativeRole && user.id) {
+          try {
+            await supabase.from("profiles").upsert({
+              id: user.id,
+              email: user.email ? user.email.trim() : "",
+              role: authoritativeRole,
+              updated_at: new Date().toISOString(),
+            });
+          } catch {}
+        }
+      }
+
+      // 4. Hydrate the specific profile corresponding strictly to the authoritative role
+      if (authoritativeRole === "candidate") {
+        if (!candData || candData.length === 0) {
+          if (user.id) {
+            const candRes = await supabase.from("candidates").select("*").eq("user_id", user.id).limit(1);
+            candData = candRes.data;
+          }
+          if ((!candData || candData.length === 0) && user.email) {
+            const candRes = await supabase.from("candidates").select("*").eq("email", user.email.trim()).limit(1);
+            candData = candRes.data;
+          }
+        }
+
         if (candData && candData.length > 0) {
           const c = candData[0];
           candidateProfile = {
             id: c.id,
-            fullName: c.full_name || user.user_metadata?.full_name || "Candidate",
+            fullName: c.full_name || user.user_metadata?.full_name || user.user_metadata?.name || "Candidate",
             headline: c.headline || "Tech Professional",
             email: c.email || user.email || "",
             phone: c.phone || "",
@@ -279,11 +374,15 @@ export class AuthService {
             expectedSalary: c.expected_salary || "",
             preferredRole: c.preferred_role || "",
             bio: c.bio || "",
-            profilePhoto: c.profile_photo || user.user_metadata?.avatar_url || "",
+            profilePhoto: c.profile_photo || user.user_metadata?.avatar_url || user.user_metadata?.picture || "",
             profileStrength: c.profile_strength || 50,
-            isCompleted: c.is_completed ?? true,
+            isCompleted: !!c.is_completed,
             resumeFilename: c.resume_filename || undefined,
             resumeText: c.resume_text || undefined,
+            commissionAgreementSigned: !!c.commission_agreement_signed,
+            commissionAgreementSignedAt: c.commission_agreement_signed_at || undefined,
+            commissionAgreementDocId: c.commission_agreement_doc_id || undefined,
+            commissionAgreementSignature: c.commission_agreement_signature || undefined,
             learnedPreferences: c.learned_preferences || undefined,
           };
         } else {
@@ -311,9 +410,10 @@ export class AuthService {
             expectedSalary: "",
             preferredRole: "",
             bio: "",
-            profilePhoto: user.user_metadata?.avatar_url || "",
+            profilePhoto: user.user_metadata?.avatar_url || user.user_metadata?.picture || "",
             profileStrength: 30,
             isCompleted: false,
+            commissionAgreementSigned: false,
           };
 
           try {
@@ -336,16 +436,27 @@ export class AuthService {
           }
           candidateProfile = newCand;
         }
-      } else if (effectiveRole === "company") {
+      } else if (authoritativeRole === "company") {
+        if (!compData || compData.length === 0) {
+          if (user.id) {
+            const compRes = await supabase.from("companies").select("*").eq("user_id", user.id).limit(1);
+            compData = compRes.data;
+          }
+          if ((!compData || compData.length === 0) && user.email) {
+            const compRes = await supabase.from("companies").select("*").eq("email", user.email.trim()).limit(1);
+            compData = compRes.data;
+          }
+        }
+
         if (compData && compData.length > 0) {
           const cp = compData[0];
           companyProfile = {
             id: cp.id,
             companyName: cp.company_name || "Company",
-            contactPerson: cp.contact_person || user.user_metadata?.full_name || "Recruiter",
+            contactPerson: cp.contact_person || user.user_metadata?.full_name || user.user_metadata?.name || "Recruiter",
             email: cp.email || user.email || "",
             phone: cp.phone || "",
-            logo: cp.logo || user.user_metadata?.avatar_url || "",
+            logo: cp.logo || user.user_metadata?.avatar_url || user.user_metadata?.picture || "",
             website: cp.website || "",
             industry: cp.industry || "Technology",
             size: cp.size || "10-50 employees",
@@ -353,7 +464,7 @@ export class AuthService {
             about: cp.about || "",
             culture: cp.culture || [],
             benefits: cp.benefits || [],
-            isCompleted: cp.is_completed ?? true,
+            isCompleted: !!cp.is_completed,
             isVerified: cp.is_verified ?? true,
             emailIntegration: (cp.email_integration as any) || {
               provider: "none",
@@ -371,10 +482,10 @@ export class AuthService {
           const newComp: CompanyProfile = {
             id: companyId,
             companyName,
-            contactPerson: user.user_metadata?.contact_person || "Recruiter",
+            contactPerson: user.user_metadata?.contact_person || user.user_metadata?.full_name || user.user_metadata?.name || "Recruiter",
             email: user.email || "",
             phone: "",
-            logo: "",
+            logo: user.user_metadata?.avatar_url || user.user_metadata?.picture || "",
             website: "",
             about: "",
             industry: "Technology",
@@ -413,14 +524,14 @@ export class AuthService {
       }
 
       return {
-        role: effectiveRole,
+        role: authoritativeRole,
         candidateProfile,
         companyProfile,
       };
     } catch (err: any) {
       console.error("fetchUserProfile failed:", err);
       return {
-        role: roleHint || "candidate",
+        role: authoritativeRole,
         candidateProfile: null,
         companyProfile: null,
       };
@@ -478,14 +589,16 @@ export class AuthService {
       const { role, candidateProfile, companyProfile } =
         await this.fetchUserProfile(user, params.expectedRole);
 
-      await AuditService.log({
-        actorId: user.id,
-        actorRole: role,
-        action: "user_signin",
-        entityType: "auth",
-        entityId: user.id,
-        metadata: { role, email: params.email.trim() },
-      });
+      if (role) {
+        await AuditService.log({
+          actorId: user.id,
+          actorRole: role,
+          action: "user_signin",
+          entityType: "auth",
+          entityId: user.id,
+          metadata: { role, email: params.email.trim() },
+        });
+      }
 
       return {
         user,

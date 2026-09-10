@@ -28,6 +28,7 @@ export const CompanyAuth: React.FC<CompanyAuthProps> = ({ initialMode, isSignup 
     role,
     setActiveView,
     setRole,
+    candidate,
     company,
     updateCompany,
     authSignUp,
@@ -48,12 +49,20 @@ export const CompanyAuth: React.FC<CompanyAuthProps> = ({ initialMode, isSignup 
     }
   }, [isSignup, initialMode]);
 
-  // If already authenticated as company, navigate to workspace
+  // If already authenticated, navigate to the authoritative workspace
   useEffect(() => {
-    if (authUser && role === "company") {
+    if (authUser && role === "candidate") {
+      if (!candidate?.isCompleted) {
+        setActiveView("candidate-onboarding");
+      } else if (!candidate?.commissionAgreementSigned) {
+        setActiveView("candidate-agreement");
+      } else {
+        setActiveView("candidate-radar");
+      }
+    } else if (authUser && role === "company") {
       setActiveView(company?.isCompleted ? "company-cockpit" : "company-onboarding");
     }
-  }, [authUser, role, company?.isCompleted, setActiveView]);
+  }, [authUser, role, company?.isCompleted, candidate?.isCompleted, candidate?.commissionAgreementSigned, setActiveView]);
 
   // Form fields
   const [companyName, setCompanyName] = useState("");

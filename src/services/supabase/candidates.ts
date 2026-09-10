@@ -38,6 +38,10 @@ export class CandidatesService {
         isCompleted: !!cand.is_completed,
         resumeFilename: cand.resume_filename || undefined,
         resumeText: cand.resume_text || undefined,
+        commissionAgreementSigned: !!cand.commission_agreement_signed,
+        commissionAgreementSignedAt: cand.commission_agreement_signed_at || undefined,
+        commissionAgreementDocId: cand.commission_agreement_doc_id || undefined,
+        commissionAgreementSignature: (cand.commission_agreement_signature as any) || undefined,
         learnedPreferences: (cand.learned_preferences as any) || undefined,
       }));
     } catch (err) {
@@ -74,6 +78,10 @@ export class CandidatesService {
         is_completed: cand.isCompleted,
         resume_filename: cand.resumeFilename,
         resume_text: cand.resumeText,
+        commission_agreement_signed: cand.commissionAgreementSigned || false,
+        commission_agreement_signed_at: cand.commissionAgreementSignedAt || null,
+        commission_agreement_doc_id: cand.commissionAgreementDocId || null,
+        commission_agreement_signature: cand.commissionAgreementSignature || null,
         learned_preferences: cand.learnedPreferences as any,
         updated_at: new Date().toISOString(),
       };

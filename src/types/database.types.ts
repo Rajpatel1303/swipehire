@@ -251,6 +251,10 @@ export type Database = {
           projects: Json | null
           resume_filename: string | null
           resume_text: string | null
+          commission_agreement_signed: boolean | null
+          commission_agreement_signed_at: string | null
+          commission_agreement_doc_id: string | null
+          commission_agreement_signature: Json | null
           skills: string[] | null
           updated_at: string
           user_id: string | null
@@ -279,6 +283,10 @@ export type Database = {
           projects?: Json | null
           resume_filename?: string | null
           resume_text?: string | null
+          commission_agreement_signed?: boolean | null
+          commission_agreement_signed_at?: string | null
+          commission_agreement_doc_id?: string | null
+          commission_agreement_signature?: Json | null
           skills?: string[] | null
           updated_at?: string
           user_id?: string | null
@@ -307,6 +315,10 @@ export type Database = {
           projects?: Json | null
           resume_filename?: string | null
           resume_text?: string | null
+          commission_agreement_signed?: boolean | null
+          commission_agreement_signed_at?: string | null
+          commission_agreement_doc_id?: string | null
+          commission_agreement_signature?: Json | null
           skills?: string[] | null
           updated_at?: string
           user_id?: string | null

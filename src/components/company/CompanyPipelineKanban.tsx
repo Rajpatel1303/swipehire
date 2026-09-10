@@ -35,6 +35,7 @@ import { FastActionCountdownBadge } from "../common/FastActionCountdownBadge";
 
 export const CompanyPipelineKanban: React.FC = () => {
   const {
+    company,
     applications,
     updateApplicationStatus,
     rejectApplication,
@@ -43,6 +44,9 @@ export const CompanyPipelineKanban: React.FC = () => {
     triggerCelebration,
     setActiveView,
   } = useApp();
+
+  const companyJobs = jobs.filter((j) => !company.id || j.companyId === company.id);
+  const companyApplications = applications.filter((a) => !company.id || a.companyId === company.id);
 
   const [selectedJobId, setSelectedJobId] = useState<string>("all");
   const [mobileActiveStage, setMobileActiveStage] = useState<ApplicationStatus | "all">("all");
@@ -70,7 +74,7 @@ export const CompanyPipelineKanban: React.FC = () => {
     { status: "hired", label: "Hired", color: "bg-emerald-600 text-white", hoverBorder: "border-emerald-600 ring-emerald-500" },
   ];
 
-  const filteredApplications = applications.filter((app) => {
+  const filteredApplications = companyApplications.filter((app) => {
     if (app.hiddenFromCompany || app.deletedByCompany || app.status === "rejected") return false;
     if (selectedJobId !== "all" && app.jobId !== selectedJobId) return false;
     return true;
@@ -195,8 +199,8 @@ export const CompanyPipelineKanban: React.FC = () => {
               onChange={(e) => setSelectedJobId(e.target.value)}
               className="bg-transparent text-xs text-slate-800 font-black uppercase tracking-wider focus:outline-none cursor-pointer"
             >
-              <option value="all">All Jobs ({applications.length})</option>
-              {jobs.map((job) => (
+              <option value="all">All Jobs ({companyApplications.length})</option>
+              {companyJobs.map((job) => (
                 <option key={job.id} value={job.id}>
                   {job.title}
                 </option>

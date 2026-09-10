@@ -3,7 +3,7 @@ import { Sparkles, ShieldCheck, Zap } from "lucide-react";
 
 export const Footer: React.FC = () => {
   return (
-    <footer className="border-t border-slate-100 bg-slate-50 text-slate-900 font-sans">
+    <footer className="no-print print:hidden border-t border-slate-100 bg-slate-50 text-slate-900 font-sans">
       {/* Bold Platform Telemetry Bar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 border-b border-slate-200/80 flex flex-col md:flex-row justify-between items-center gap-6">
         <div className="flex flex-wrap items-center gap-8 sm:gap-12">

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   UploadCloud,
   FileText,
@@ -19,33 +19,38 @@ export const CandidateOnboarding: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentScanStep, setCurrentScanStep] = useState<string>("");
+  const [progressPct, setProgressPct] = useState<number>(5);
   const [fileName, setFileName] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const isProcessingRef = useRef(false);
 
   const processResumeContent = async (
     input: File | string,
     originalName?: string,
     personName?: string
   ) => {
+    // Re-entrancy guard to prevent duplicate concurrent submissions
+    if (isProcessingRef.current) return;
+    isProcessingRef.current = true;
+
     setIsProcessing(true);
     setErrorMsg(null);
+    setProgressPct(8);
     const resolvedFileName = originalName || (input instanceof File ? input.name : "Resume.pdf");
     setFileName(resolvedFileName);
-
-    // Scan steps animation
-    setCurrentScanStep("Uploading & analyzing document stream with Eden AI...");
-    await new Promise((r) => setTimeout(r, 600));
-
-    setCurrentScanStep("✦ Eden AI extracting work history, skills, experience & achievements...");
-    await new Promise((r) => setTimeout(r, 700));
-
-    setCurrentScanStep("Mapping extracted skills to SwipeHired Career Profile...");
+    setCurrentScanStep("Validating resume format and structure in browser...");
 
     try {
       const extracted = await GeminiService.parseResume(
         input,
-        personName || candidate.fullName,
-        resolvedFileName
+        personName,
+        resolvedFileName,
+        (_state, message, pct) => {
+          setCurrentScanStep(message);
+          if (typeof pct === "number" && !isNaN(pct)) {
+            setProgressPct(Math.max(5, Math.min(100, pct)));
+          }
+        }
       );
 
       updateCandidate({
@@ -76,6 +81,7 @@ export const CandidateOnboarding: React.FC = () => {
       setErrorMsg("AI extraction encountered an issue reading the document format. Proceeding to manual review.");
       setActiveView("candidate-review");
     } finally {
+      isProcessingRef.current = false;
       setIsProcessing(false);
     }
   };
@@ -102,13 +108,13 @@ export const CandidateOnboarding: React.FC = () => {
         <div className="text-center space-y-2">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-100">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Eden AI Resume Ingestion</span>
+            <span>Client-Side PDF Engine + Eden AI Gemma 4</span>
           </div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">
             "Let's build your career profile."
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto">
-            Upload your resume. Our AI reads your background, extracts verified skills, work history, and auto-fills every field for you.
+            Upload your resume. Our in-browser parser reads your document privately, and Google Gemma 4 auto-fills your complete career profile.
           </p>
         </div>
 
@@ -137,7 +143,7 @@ export const CandidateOnboarding: React.FC = () => {
             <input
               id="resume-file-input"
               type="file"
-              accept=".pdf,.doc,.docx,.txt"
+              accept=".pdf,.docx,.txt,.md,image/png,image/jpeg"
               onChange={handleFileUpload}
               className="hidden"
             />
@@ -150,13 +156,13 @@ export const CandidateOnboarding: React.FC = () => {
                   Drop your resume here or <span className="text-emerald-600 underline">browse</span>
                 </h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  Supported formats: <strong>PDF, DOC, DOCX, TXT</strong> (Auto-extracted by Eden AI)
+                  Supported formats: <strong>PDF, DOCX, TXT, Images</strong> (Extracted privately in your browser)
                 </p>
               </div>
 
               <div className="inline-flex items-center gap-2 px-3 py-1 bg-slate-100 rounded-full text-[11px] text-slate-600 font-medium">
                 <Shield className="w-3.5 h-3.5 text-emerald-600" />
-                <span>100% Private · AI encrypted parsing</span>
+                <span>100% Private · In-Browser Document Extraction & OCR</span>
               </div>
             </label>
           </div>
@@ -172,7 +178,7 @@ export const CandidateOnboarding: React.FC = () => {
 
             <div className="space-y-2">
               <h3 className="text-base font-black text-slate-900">
-                Extracting Details with Eden AI...
+                AI Resume Intelligence...
               </h3>
               <p className="text-xs text-emerald-700 font-semibold animate-pulse">
                 {currentScanStep}
@@ -185,8 +191,17 @@ export const CandidateOnboarding: React.FC = () => {
               )}
             </div>
 
-            <div className="max-w-xs mx-auto w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-              <div className="bg-gradient-to-r from-emerald-500 via-sky-500 to-orange-500 h-full w-4/5 animate-pulse rounded-full"></div>
+            <div className="max-w-xs mx-auto w-full space-y-1.5">
+              <div className="flex justify-between items-center text-[11px] font-bold text-slate-500 px-0.5">
+                <span>Extraction Pipeline</span>
+                <span className="text-emerald-700">{progressPct}%</span>
+              </div>
+              <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden p-0.5">
+                <div 
+                  className="bg-gradient-to-r from-emerald-500 via-sky-500 to-indigo-600 h-full rounded-full transition-all duration-300 ease-out"
+                  style={{ width: `${progressPct}%` }}
+                ></div>
+              </div>
             </div>
           </div>
         )}

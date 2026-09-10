@@ -26,6 +26,7 @@ const DRAFT_STORAGE_KEY = "swipehired_new_job_draft";
 
 export const CompanyJobsPage: React.FC = () => {
   const {
+    company,
     jobs,
     applications,
     toggleJobStatus,
@@ -70,7 +71,10 @@ export const CompanyJobsPage: React.FC = () => {
     setSavedLocalDraft(null);
   };
 
-  const filteredJobs = jobs.filter((job) => {
+  // Defense-in-depth: scope strictly to company.id
+  const companyJobs = jobs.filter((job) => !company.id || job.companyId === company.id);
+
+  const filteredJobs = companyJobs.filter((job) => {
     if (filterStatus === "all") return true;
     return job.status === filterStatus;
   });
@@ -161,7 +165,7 @@ export const CompanyJobsPage: React.FC = () => {
               : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
           }`}
         >
-          All Roles ({jobs.length})
+          All Roles ({companyJobs.length})
         </button>
         <button
           onClick={() => setFilterStatus("active")}
@@ -171,7 +175,7 @@ export const CompanyJobsPage: React.FC = () => {
               : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
           }`}
         >
-          Active ({jobs.filter((j) => j.status === "active").length})
+          Active ({companyJobs.filter((j) => j.status === "active").length})
         </button>
         <button
           onClick={() => setFilterStatus("draft")}
@@ -182,7 +186,7 @@ export const CompanyJobsPage: React.FC = () => {
           }`}
         >
           <Bookmark className="w-3 h-3" />
-          <span>Drafts ({jobs.filter((j) => j.status === "draft").length})</span>
+          <span>Drafts ({companyJobs.filter((j) => j.status === "draft").length})</span>
         </button>
         <button
           onClick={() => setFilterStatus("paused")}
@@ -192,7 +196,7 @@ export const CompanyJobsPage: React.FC = () => {
               : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
           }`}
         >
-          Paused ({jobs.filter((j) => j.status === "paused").length})
+          Paused ({companyJobs.filter((j) => j.status === "paused").length})
         </button>
         <button
           onClick={() => setFilterStatus("closed")}
@@ -202,7 +206,7 @@ export const CompanyJobsPage: React.FC = () => {
               : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
           }`}
         >
-          Closed ({jobs.filter((j) => j.status === "closed").length})
+          Closed ({companyJobs.filter((j) => j.status === "closed").length})
         </button>
       </div>
 

@@ -98,7 +98,7 @@ export const Navbar: React.FC = () => {
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-2xs">
+    <header className="no-print print:hidden sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-2xs">
       {/* Row 1: Primary Header Bar (Brand Identity & Global Actions) */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 gap-3 sm:gap-6">
@@ -108,9 +108,9 @@ export const Navbar: React.FC = () => {
               <button
                 id="nav-logo-btn"
                 onClick={() => {
-                  if (role === "candidate") setActiveView("candidate-radar");
-                  else if (role === "company") setActiveView("company-cockpit");
-                  else if (role === "admin") setActiveView("admin-overview");
+                  if (authUser && role === "candidate") setActiveView("candidate-radar");
+                  else if (authUser && role === "company") setActiveView("company-cockpit");
+                  else if (authUser && role === "admin") setActiveView("admin-overview");
                   else setActiveView("landing");
                 }}
                 className="flex items-center gap-2.5 cursor-pointer focus:outline-none"
@@ -123,7 +123,7 @@ export const Navbar: React.FC = () => {
                 </span>
               </button>
 
-              {role && (
+              {authUser && role && (
                 <span className="px-2 py-0.5 text-[9px] font-black bg-slate-100 text-slate-700 rounded-full uppercase tracking-widest border border-slate-200 shrink-0">
                   {role === "candidate" ? "Candidate" : role === "company" ? "Recruiter" : "Admin"}
                 </span>
@@ -152,7 +152,7 @@ export const Navbar: React.FC = () => {
           {/* Right: Controls & Actions */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             {/* Quick Post Job shortcut for recruiter */}
-            {role === "company" && (
+            {authUser && role === "company" && (
               <button
                 id="nav-quick-add-job"
                 onClick={openAddJobModal}
@@ -164,7 +164,7 @@ export const Navbar: React.FC = () => {
             )}
 
             {/* Notifications Dropdown */}
-            {role && (
+            {authUser && role && (
               <div className="relative shrink-0" ref={notificationsRef}>
                 <button
                   id="notifications-toggle"
@@ -247,7 +247,7 @@ export const Navbar: React.FC = () => {
             )}
 
             {/* Profile Avatar / Auth Buttons */}
-            {role ? (
+            {authUser && role ? (
               <div className="relative shrink-0" ref={profileRef}>
                 <button
                   id="profile-menu-toggle"
@@ -333,7 +333,7 @@ export const Navbar: React.FC = () => {
               <div className="flex items-center gap-2 sm:gap-3">
                 <button
                   id="landing-nav-login-btn"
-                  onClick={() => setActiveView("candidate-login")}
+                  onClick={() => setActiveView("auth-select")}
                   className="bg-slate-900 hover:bg-slate-800 text-white px-4 sm:px-5 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-xs focus:outline-none shrink-0"
                 >
                   Log In
@@ -353,7 +353,7 @@ export const Navbar: React.FC = () => {
       </div>
 
       {/* Row 2: Universal Sub-Navigation Bar (Horizontal pill tabs for all viewports) */}
-      {role && (
+      {authUser && role && (
         <div className="border-t border-slate-200/80 bg-slate-50/95 px-4 sm:px-6 lg:px-8 py-2 overflow-x-auto no-scrollbar">
           <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
             <nav className="flex items-center gap-2 min-w-max">

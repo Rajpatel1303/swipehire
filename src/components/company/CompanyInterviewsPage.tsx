@@ -21,7 +21,9 @@ export const CompanyInterviewsPage: React.FC = () => {
 
   const [activeScheduleModal, setActiveScheduleModal] = useState<Application | null>(null);
 
-  const interviewApps = applications.filter((app) => app.status === "interview");
+  const interviewApps = applications.filter(
+    (app) => (!company.id || app.companyId === company.id) && app.status === "interview"
+  );
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6 animate-in fade-in duration-200">

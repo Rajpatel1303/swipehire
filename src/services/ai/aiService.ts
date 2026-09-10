@@ -12,9 +12,10 @@ export class AIService {
   static async parseResume(
     input: string | File | Blob,
     candidateName?: string,
-    originalFileName?: string
+    originalFileName?: string,
+    onProgress?: (state: any, message: string, progressPct?: number) => void
   ): Promise<ParsedResumeResult> {
-    return ResumeParser.parse(input, candidateName, originalFileName);
+    return ResumeParser.parse(input, candidateName, originalFileName, onProgress);
   }
 
   /**

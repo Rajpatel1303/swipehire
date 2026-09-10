@@ -30,13 +30,19 @@ import { InterviewKitModal } from "./modals/InterviewKitModal";
 import { OfferLetterModal } from "./modals/OfferLetterModal";
 
 export const CompanyComparisonPage: React.FC = () => {
-  const { jobs, applications, allCandidates, triggerCelebration } = useApp();
+  const { jobs, applications, allCandidates, triggerCelebration, company } = useApp();
+
+  // Defense-in-depth: scope jobs to current company
+  const companyJobs = useMemo(
+    () => jobs.filter((j) => !company.id || j.companyId === company.id),
+    [jobs, company.id]
+  );
 
   // Selected Target Job
-  const [selectedJobId, setSelectedJobId] = useState<string>(jobs[0]?.id || "");
+  const [selectedJobId, setSelectedJobId] = useState<string>(companyJobs[0]?.id || "");
   const selectedJob = useMemo(
-    () => jobs.find((j) => j.id === selectedJobId) || jobs[0],
-    [jobs, selectedJobId]
+    () => companyJobs.find((j) => j.id === selectedJobId) || companyJobs[0],
+    [companyJobs, selectedJobId]
   );
 
   // Available candidate profiles
@@ -251,7 +257,7 @@ export const CompanyComparisonPage: React.FC = () => {
               }}
               className="bg-transparent text-xs text-slate-900 font-black uppercase tracking-wider focus:outline-none cursor-pointer"
             >
-              {jobs.map((job) => (
+              {companyJobs.map((job) => (
                 <option key={job.id} value={job.id}>
                   {job.title} ({job.experience} • {job.salary})
                 </option>
@@ -604,7 +610,7 @@ export const CompanyComparisonPage: React.FC = () => {
                 {selectedCandidates.map((cand) => (
                   <td key={cand.id} className="p-4 border-l border-slate-100">
                     <div className="flex flex-wrap gap-1">
-                      {cand.skills.map((s, i) => (
+                      {(cand.skills || []).map((s, i) => (
                         <span
                           key={i}
                           className="px-2 py-0.5 bg-slate-100 text-slate-800 rounded font-bold text-[10px] uppercase"

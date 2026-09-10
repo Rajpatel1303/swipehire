@@ -1,5 +1,13 @@
 export type UserRole = "candidate" | "company" | "admin" | null;
 
+export type AuthStatus =
+  | "AUTH_LOADING"
+  | "UNAUTHENTICATED"
+  | "AUTHENTICATED_CANDIDATE"
+  | "AUTHENTICATED_COMPANY"
+  | "AUTHENTICATED_ADMIN"
+  | "ROLE_UNSET";
+
 export interface EducationItem {
   id?: string;
   degree: string;
@@ -47,6 +55,17 @@ export interface CandidateProfile {
   isCompleted: boolean;
   resumeFilename?: string;
   resumeText?: string;
+  // Mandatory 10% Placement Commission Agreement & E-Signature
+  commissionAgreementSigned?: boolean;
+  commissionAgreementSignedAt?: string;
+  commissionAgreementDocId?: string;
+  commissionAgreementSignature?: {
+    signerName: string;
+    signatureStyle?: string;
+    signatureHash: string;
+    timestamp: string;
+    ipStamp?: string;
+  };
   // Dynamic learned preference weights from swipe behavior
   learnedPreferences?: {
     preferredSkills: string[];

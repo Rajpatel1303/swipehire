@@ -71,6 +71,7 @@ const STAGE_CONFIG: Record<
 
 export const CompanyApplicationsPage: React.FC = () => {
   const {
+    company,
     applications,
     jobs,
     allCandidates,
@@ -88,6 +89,16 @@ export const CompanyApplicationsPage: React.FC = () => {
     triggerCelebration,
     setActiveView,
   } = useApp();
+
+  // Defense-in-depth: scope jobs and applications to current company
+  const companyJobs = useMemo(
+    () => jobs.filter((j) => !company.id || j.companyId === company.id),
+    [jobs, company.id]
+  );
+  const companyApplications = useMemo(
+    () => applications.filter((a) => !company.id || a.companyId === company.id),
+    [applications, company.id]
+  );
 
   // Filters & Search
   const [filterJobId, setFilterJobId] = useState<string>(selectedJobId || "all");
@@ -150,7 +161,7 @@ export const CompanyApplicationsPage: React.FC = () => {
 
   // Filtered and Sorted Applications
   const filteredApplications = useMemo(() => {
-    return applications
+    return companyApplications
       .filter((app) => {
         // Job filter
         if (filterJobId !== "all" && app.jobId !== filterJobId) {
@@ -204,27 +215,27 @@ export const CompanyApplicationsPage: React.FC = () => {
         // Recent
         return new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime();
       });
-  }, [applications, filterJobId, searchQuery, filterStage, sortBy]);
+  }, [companyApplications, filterJobId, searchQuery, filterStage, sortBy]);
 
   // Key Metrics
   const stats = useMemo(() => {
-    const activeCompanyApps = applications.filter((a) => !a.hiddenFromCompany && !a.deletedByCompany && a.status !== "rejected");
+    const activeCompanyApps = companyApplications.filter((a) => !a.hiddenFromCompany && !a.deletedByCompany && a.status !== "rejected");
     const total = activeCompanyApps.length;
     const pendingReview = activeCompanyApps.filter((a) => a.status === "applied" && !a.isExpired).length;
-    const expiredCount = applications.filter((a) => a.status === "expired" || a.isExpired).length;
+    const expiredCount = companyApplications.filter((a) => a.status === "expired" || a.isExpired).length;
     const shortlisted = activeCompanyApps.filter((a) => (a.status === "shortlisted" || a.status === "screening") && !a.isExpired).length;
     const interviewing = activeCompanyApps.filter((a) => a.status === "interview").length;
     const offers = activeCompanyApps.filter((a) => a.status === "offer" || a.status === "hired").length;
-    const rejectedCount = applications.filter((a) => a.status === "rejected").length;
+    const rejectedCount = companyApplications.filter((a) => a.status === "rejected").length;
     const avgScore = activeCompanyApps.length > 0
       ? Math.round(activeCompanyApps.reduce((acc, a) => acc + (a.matchScore || 0), 0) / activeCompanyApps.length)
       : 0;
     return { total, pendingReview, expiredCount, shortlisted, interviewing, offers, rejectedCount, avgScore };
-  }, [applications]);
+  }, [companyApplications]);
 
   // Find the single most urgent pending application requiring recruiter review action
   const mostUrgentApplication = useMemo(() => {
-    const pending = applications.filter((a) => a.status === "applied" && !a.isExpired);
+    const pending = companyApplications.filter((a) => a.status === "applied" && !a.isExpired);
     if (pending.length === 0) return null;
     return pending.reduce((earliest, curr) => {
       const earliestDeadline = earliest.slaDeadline
@@ -235,7 +246,7 @@ export const CompanyApplicationsPage: React.FC = () => {
         : new Date(curr.appliedAt).getTime() + 72 * 3600 * 1000;
       return currDeadline < earliestDeadline ? curr : earliest;
     }, pending[0]);
-  }, [applications]);
+  }, [companyApplications]);
 
   // Bulk Actions
   const handleSelectAll = () => {
@@ -348,7 +359,7 @@ export const CompanyApplicationsPage: React.FC = () => {
             className="flex items-center gap-1.5 px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-full font-bold text-xs transition-colors cursor-pointer"
           >
             <Briefcase className="w-3.5 h-3.5 text-sky-600" />
-            <span>Job Postings ({jobs.length})</span>
+            <span>Job Postings ({companyJobs.length})</span>
           </button>
         </div>
       </div>
@@ -395,7 +406,7 @@ export const CompanyApplicationsPage: React.FC = () => {
             <span>90%+ Match</span>
           </div>
           <div className="text-2xl font-black text-emerald-950 mt-1">
-            {applications.filter((a) => (a.matchScore || 0) >= 90 && !a.isExpired).length}
+            {companyApplications.filter((a) => (a.matchScore || 0) >= 90 && !a.isExpired).length}
           </div>
         </div>
 
@@ -454,9 +465,9 @@ export const CompanyApplicationsPage: React.FC = () => {
               }}
               className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 w-full sm:w-auto"
             >
-              <option value="all">All Jobs ({applications.length} Applicants)</option>
-              {jobs.map((j) => {
-                const count = applications.filter((a) => a.jobId === j.id).length;
+              <option value="all">All Jobs ({companyApplications.length} Applicants)</option>
+              {companyJobs.map((j) => {
+                const count = companyApplications.filter((a) => a.jobId === j.id).length;
                 return (
                   <option key={j.id} value={j.id}>
                     {j.title} ({count} applicants)

@@ -17,6 +17,7 @@ import { CompanyAuth } from "./components/auth/CompanyAuth";
 // Candidate Views
 import { CandidateOnboarding } from "./components/candidate/CandidateOnboarding";
 import { CandidateProfileReview } from "./components/candidate/CandidateProfileReview";
+import { CandidateAgreementPage } from "./components/candidate/CandidateAgreementPage";
 import { CareerRadarDashboard } from "./components/candidate/CareerRadarDashboard";
 import { CandidateJobsPage } from "./components/candidate/CandidateJobsPage";
 import { CandidateApplicationsPage } from "./components/candidate/CandidateApplicationsPage";
@@ -40,25 +41,75 @@ import { ReverseMarketplacePage } from "./components/marketplace/ReverseMarketpl
 import { AdminPortal } from "./components/admin/AdminPortal";
 
 const MainContent: React.FC = () => {
-  const { activeView, role, candidate, company, isAddJobModalOpen, setIsAddJobModalOpen } = useApp();
+  const {
+    authUser,
+    activeView,
+    role,
+    authStatus,
+    isAuthLoading,
+    candidate,
+    company,
+    isAddJobModalOpen,
+    setIsAddJobModalOpen,
+  } = useApp();
+
+  // 1. Loading Screen Gate: Never flash dashboard or wrong role while session is hydrating
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 selection:bg-orange-500 selection:text-white">
+        <div className="flex flex-col items-center gap-5 animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-amber-500 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-500/25 animate-pulse">
+            <span className="text-white font-black text-3xl leading-none">S</span>
+          </div>
+          <div className="flex flex-col items-center gap-2 text-center">
+            <span className="text-2xl font-black tracking-tighter text-slate-900 uppercase italic">
+              Swipe<span className="text-orange-500">Hired</span>
+            </span>
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-widest">
+              <span className="w-2 h-2 rounded-full bg-orange-500 animate-ping" />
+              <span>Authenticating Workspace...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const renderCurrentView = () => {
-    // Guard against role/view mismatch: Company users should never see candidate onboarding/radar
-    if (role === "company") {
+    // 2. Unauthenticated Guard: Protected views require an active authenticated session
+    if (!role || authStatus === "UNAUTHENTICATED") {
+      const publicViews = [
+        "landing",
+        "auth-select",
+        "candidate-login",
+        "candidate-signup",
+        "company-login",
+        "company-signup",
+      ];
+      if (!publicViews.includes(activeView)) {
+        return <LandingPage />;
+      }
+    }
+
+    // 3. Strict Company Guard: Company users should never see candidate views
+    if (authUser && role === "company") {
       if (
         activeView === "candidate-onboarding" ||
         activeView === "candidate-review" ||
+        activeView === "candidate-agreement" ||
         activeView === "candidate-radar" ||
         activeView === "candidate-jobs" ||
         activeView === "candidate-applications" ||
-        activeView === "candidate-profile"
+        activeView === "candidate-profile" ||
+        activeView === "candidate-login" ||
+        activeView === "candidate-signup"
       ) {
         return company.isCompleted ? <CompanyCockpitDashboard /> : <CompanyOnboarding />;
       }
     }
 
-    // Guard against role/view mismatch: Candidate users should never see recruiter onboarding/cockpit
-    if (role === "candidate") {
+    // 4. Strict Candidate Guard: Candidate users should never see company views
+    if (authUser && role === "candidate") {
       if (
         activeView === "company-onboarding" ||
         activeView === "company-cockpit" ||
@@ -68,9 +119,25 @@ const MainContent: React.FC = () => {
         activeView === "company-pipeline" ||
         activeView === "company-email-connect" ||
         activeView === "company-interviews" ||
-        activeView === "company-compare"
+        activeView === "company-compare" ||
+        activeView === "company-login" ||
+        activeView === "company-signup"
       ) {
-        return candidate.isCompleted ? <CareerRadarDashboard /> : <CandidateOnboarding />;
+        if (!candidate.isCompleted) return <CandidateOnboarding />;
+        if (!candidate.commissionAgreementSigned) return <CandidateAgreementPage />;
+        return <CareerRadarDashboard />;
+      }
+
+      // Mandatory gate for candidate dashboard views: must sign 10% commission agreement
+      if (
+        !candidate.commissionAgreementSigned &&
+        (activeView === "candidate-radar" ||
+          activeView === "candidate-jobs" ||
+          activeView === "candidate-applications" ||
+          activeView === "candidate-profile" ||
+          activeView === "blind-marketplace")
+      ) {
+        return candidate.isCompleted ? <CandidateAgreementPage /> : <CandidateOnboarding />;
       }
     }
 
@@ -95,6 +162,8 @@ const MainContent: React.FC = () => {
         return <CandidateOnboarding />;
       case "candidate-review":
         return <CandidateProfileReview />;
+      case "candidate-agreement":
+        return <CandidateAgreementPage />;
       case "candidate-radar":
         return <CareerRadarDashboard />;
       case "candidate-jobs":

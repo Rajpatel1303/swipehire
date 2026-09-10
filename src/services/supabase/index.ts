@@ -45,6 +45,7 @@ export const SupabaseService = {
   // Jobs
   getJobs: JobsService.getJobs.bind(JobsService),
   saveJob: JobsService.saveJob.bind(JobsService),
+  deleteJob: JobsService.deleteJob.bind(JobsService),
 
   // Applications
   getApplications: ApplicationsService.getApplications.bind(ApplicationsService),

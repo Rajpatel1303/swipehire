@@ -28,6 +28,7 @@ export const CandidateAuth: React.FC<CandidateAuthProps> = ({ initialMode, isSig
     setActiveView,
     setRole,
     candidate,
+    company,
     updateCandidate,
     authSignUp,
     authSignIn,
@@ -47,12 +48,20 @@ export const CandidateAuth: React.FC<CandidateAuthProps> = ({ initialMode, isSig
     }
   }, [isSignup, initialMode]);
 
-  // If already authenticated as candidate, navigate to workspace
+  // If already authenticated, navigate to the authoritative workspace
   useEffect(() => {
-    if (authUser && role === "candidate") {
-      setActiveView(candidate?.isCompleted ? "candidate-radar" : "candidate-onboarding");
+    if (authUser && role === "company") {
+      setActiveView(company?.isCompleted ? "company-cockpit" : "company-onboarding");
+    } else if (authUser && role === "candidate") {
+      if (!candidate?.isCompleted) {
+        setActiveView("candidate-onboarding");
+      } else if (!candidate?.commissionAgreementSigned) {
+        setActiveView("candidate-agreement");
+      } else {
+        setActiveView("candidate-radar");
+      }
     }
-  }, [authUser, role, candidate?.isCompleted, setActiveView]);
+  }, [authUser, role, candidate?.isCompleted, candidate?.commissionAgreementSigned, company?.isCompleted, setActiveView]);
 
   // Form states
   const [fullName, setFullName] = useState("");

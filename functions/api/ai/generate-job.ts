@@ -1,4 +1,4 @@
-type PagesFunction<Env = any> = (context: {
+ï»¿declare type PagesFunction<Env = { AI?: { run: (model: string, inputs: Record<string, any>) => Promise<any> } }> = (context: {
   request: Request;
   env: Env;
   params: Record<string, string | string[]>;
@@ -7,83 +7,82 @@ type PagesFunction<Env = any> = (context: {
   data: Record<string, any>;
 }) => Promise<Response>;
 
-export const onRequestPost: PagesFunction<{ EDENAI_API_KEY?: string }> = async (context) => {
+export const onRequestPost: PagesFunction = async (context) => {
   try {
     const body = (await context.request.json()) as any;
-    const { prompt: userPrompt, companyName, companyLocation } = body || {};
-    const apiKey = context.env.EDENAI_API_KEY || "";
+    const { prompt: userPrompt, companyName = "Tech Team", companyLocation = "Ahmedabad, India", title, department } = body || {};
 
-    if (!apiKey) {
-      return new Response(
-        JSON.stringify({
-          success: true,
-          job: {
-            title: "Full Stack Developer",
-            department: "Engineering",
-            location: companyLocation || "Ahmedabad, India",
-            workMode: "Hybrid",
-            experience: "2–4 Years",
-            salary: "?7–10 LPA",
-            openings: 2,
-            description: `Join ${companyName || "our team"} to build next-generation web applications.`,
-            responsibilities: [
-              "Architect and maintain scalable frontend interfaces using React and TypeScript.",
-              "Design high-throughput RESTful APIs in Node.js.",
-            ],
-            requirements: [
-              "2+ years hands-on software development experience.",
-              "Solid understanding of JavaScript/TypeScript and web development.",
-            ],
-            requiredSkills: ["React", "TypeScript", "Node.js", "Tailwind CSS"],
-            preferredSkills: ["PostgreSQL", "Next.js", "Docker"],
-          },
-        }),
-        { headers: { "Content-Type": "application/json" } }
-      );
-    }
+    const prompt = `You are SwipeHired's AI Job Architect powered by Google Gemma 4 26B on Cloudflare Workers AI.
+Generate a comprehensive, attractive job description.
 
-    const prompt = `You are SwipeHired's AI Job Architect powered by Eden AI. Generate a comprehensive, attractive job posting.
-Recruiter Brief: "${userPrompt}"
-Company Name: "${companyName || "InnovateTech"}"
-Location: "${companyLocation || "Ahmedabad, India"}"
+RECRUITER BRIEF:
+"${(userPrompt || title || "Software Engineer").slice(0, 2000)}"
 
-Respond strictly in JSON matching:
+COMPANY: "${companyName}"
+LOCATION: "${companyLocation}"
+
+Respond strictly with valid JSON matching:
 {
-  "title": "Job Title",
-  "department": "Engineering",
-  "location": "Ahmedabad, India",
-  "workMode": "Hybrid" or "Remote" or "Onsite",
-  "experience": "2–4 Years",
-  "salary": "?7–10 LPA",
+  "title": "${title || "Full Stack Developer"}",
+  "department": "${department || "Engineering"}",
+  "location": "${companyLocation}",
+  "workMode": "Hybrid",
+  "experience": "2-4 Years",
+  "salary": "INR 7-12 LPA",
   "openings": 2,
-  "description": "Compelling job description",
+  "description": "Compelling role overview.",
   "responsibilities": ["Responsibility 1", "Responsibility 2", "Responsibility 3"],
   "requirements": ["Requirement 1", "Requirement 2", "Requirement 3"],
-  "requiredSkills": ["Skill 1", "Skill 2", "Skill 3"],
-  "preferredSkills": ["Skill 1", "Skill 2"]
+  "requiredSkills": ["React", "TypeScript", "Node.js"],
+  "preferredSkills": ["PostgreSQL", "Next.js", "Docker"]
 }`;
 
-    const edenRes = await fetch("https://api.edenai.run/v2/text/chat", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        providers: "openai",
-        text: prompt,
-        temperature: 0.1,
-      }),
-    });
+    let job: any = null;
+    if (context.env.AI) {
+      try {
+        const aiRes = await context.env.AI.run("@cf/google/gemma-4-26b-a4b-it", {
+          prompt,
+          max_tokens: 2000,
+          temperature: 0.1,
+        });
 
-    if (!edenRes.ok) {
-      throw new Error(`Eden AI chat status ${edenRes.status}`);
+        let rawText = typeof aiRes === "string" ? aiRes : aiRes?.response || aiRes?.generated_text || JSON.stringify(aiRes);
+        let cleaned = rawText.trim();
+        const codeBlock = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+        if (codeBlock && codeBlock[1]) cleaned = codeBlock[1].trim();
+        const firstBrace = cleaned.indexOf("{");
+        const lastBrace = cleaned.lastIndexOf("}");
+        if (firstBrace !== -1 && lastBrace !== -1) {
+          job = JSON.parse(cleaned.substring(firstBrace, lastBrace + 1));
+        }
+      } catch (aiErr) {
+        console.warn("Pages Function AI generate-job error:", aiErr);
+      }
     }
 
-    const json = (await edenRes.json()) as any;
-    const rawText = json?.openai?.generated_text || "";
-    const cleaned = rawText.replace(/```json\n?/gi, "").replace(/```\n?/g, "").trim();
-    const job = JSON.parse(cleaned);
+    if (!job) {
+      job = {
+        title: title || "Full Stack Developer",
+        department: department || "Engineering",
+        location: companyLocation,
+        workMode: "Hybrid",
+        experience: "2-4 Years",
+        salary: "INR 7-12 LPA",
+        openings: 2,
+        description: `Join ${companyName} to build high-scale software applications.`,
+        responsibilities: [
+          "Architect and maintain scalable frontend interfaces with React and TypeScript.",
+          "Design high-throughput RESTful APIs in Node.js.",
+          "Collaborate with team members to ship high-impact features.",
+        ],
+        requirements: [
+          "2+ years of professional software engineering experience.",
+          "Solid fundamentals in JavaScript/TypeScript and web development.",
+        ],
+        requiredSkills: ["React", "TypeScript", "Node.js", "Tailwind CSS"],
+        preferredSkills: ["PostgreSQL", "Next.js", "Docker"],
+      };
+    }
 
     return new Response(JSON.stringify({ success: true, job }), {
       headers: { "Content-Type": "application/json" },
@@ -91,29 +90,10 @@ Respond strictly in JSON matching:
   } catch (err: any) {
     return new Response(
       JSON.stringify({
-        success: true,
-        job: {
-          title: "Full Stack Developer",
-          department: "Engineering",
-          location: "Ahmedabad, India",
-          workMode: "Hybrid",
-          experience: "2–4 Years",
-          salary: "?7–10 LPA",
-          openings: 2,
-          description: "Exciting opportunity to build high-scale software applications.",
-          responsibilities: [
-            "Build responsive, modern UI components with React.",
-            "Develop robust API endpoints and data workflows in Node.js.",
-          ],
-          requirements: [
-            "2+ years of professional software engineering experience.",
-            "Solid fundamentals in JavaScript/TypeScript and web development.",
-          ],
-          requiredSkills: ["React", "Node.js", "TypeScript", "Tailwind CSS"],
-          preferredSkills: ["PostgreSQL", "Next.js", "Docker"],
-        },
+        success: false,
+        error: { code: "AI_JOB_GEN_FAILED", message: err.message || "Failed to generate job spec." },
       }),
-      { headers: { "Content-Type": "application/json" } }
+      { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
 };

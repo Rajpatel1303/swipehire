@@ -57,8 +57,18 @@ export const CandidateProfileReview: React.FC = () => {
       if (candidate.location) setLocation(candidate.location);
       if (candidate.workPreference) setWorkPreference(candidate.workPreference);
       if (candidate.yearsOfExperience !== undefined) setYearsOfExperience(candidate.yearsOfExperience);
-      if (candidate.expectedSalary) setExpectedSalary(candidate.expectedSalary);
-      if (candidate.preferredRole) setPreferredRole(candidate.preferredRole);
+      if (candidate.expectedSalary) {
+        setExpectedSalary(candidate.expectedSalary);
+      } else {
+        const exp = candidate.yearsOfExperience || 0;
+        const defaultSal = exp <= 1 ? "₹4–7 LPA" : exp <= 3 ? "₹7–11 LPA" : exp <= 6 ? "₹12–18 LPA" : "₹20–30 LPA";
+        setExpectedSalary(defaultSal);
+      }
+      if (candidate.preferredRole) {
+        setPreferredRole(candidate.preferredRole);
+      } else if (candidate.headline) {
+        setPreferredRole(candidate.headline);
+      }
       if (candidate.bio) setBio(candidate.bio);
       if (candidate.profilePhoto) setProfilePhoto(candidate.profilePhoto);
       if (candidate.skills && candidate.skills.length > 0) setSkills(candidate.skills);
@@ -92,6 +102,8 @@ export const CandidateProfileReview: React.FC = () => {
       return;
     }
 
+    const nextIsCompleted = true;
+
     updateCandidate({
       fullName,
       headline,
@@ -105,12 +117,16 @@ export const CandidateProfileReview: React.FC = () => {
       bio,
       profilePhoto,
       skills,
-      isCompleted: true,
+      isCompleted: nextIsCompleted,
     });
 
-    triggerCelebration();
-    // Navigate to Career Radar as per Spec #8
-    setActiveView("candidate-radar");
+    if (candidate.commissionAgreementSigned) {
+      triggerCelebration();
+      setActiveView("candidate-radar");
+    } else {
+      // Proceed to mandatory 10% Placement Commission Agreement & E-Signature
+      setActiveView("candidate-agreement");
+    }
   };
 
   return (
@@ -314,6 +330,7 @@ export const CandidateProfileReview: React.FC = () => {
               type="number"
               min="0"
               max="30"
+              step="any"
               value={yearsOfExperience}
               onChange={(e) => setYearsOfExperience(Number(e.target.value))}
               className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"

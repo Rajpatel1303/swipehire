@@ -4,13 +4,17 @@ import { AuditService } from "./audit";
 
 export class JobsService {
   /**
-   * Fetch all jobs with joined company info
+   * Fetch jobs with joined company info.
+   * If companyId is passed, scopes specifically to that company in addition to database RLS.
    */
-  static async getJobs(): Promise<Job[]> {
+  static async getJobs(companyId?: string): Promise<Job[]> {
     try {
-      const { data, error } = await supabase
-        .from("jobs")
-        .select("*, companies(*)");
+      let query = supabase.from("jobs").select("*, companies(*)");
+      if (companyId) {
+        query = query.eq("company_id", companyId);
+      }
+
+      const { data, error } = await query;
 
       if (error || !data) {
         console.warn("[JobsService] Failed to fetch jobs:", error?.message);
@@ -83,7 +87,7 @@ export class JobsService {
       });
 
       if (error) {
-        console.warn("[JobsService] Failed to upsert job:", error.message);
+        console.warn("[JobsService] Failed to upsert job (possible RLS violation):", error.message);
         return false;
       }
 
@@ -99,6 +103,41 @@ export class JobsService {
       return true;
     } catch (err) {
       console.warn("[JobsService] Unexpected error saving job:", err);
+      return false;
+    }
+  }
+
+  /**
+   * Delete job posting by ID
+   */
+  static async deleteJob(id: string): Promise<boolean> {
+    try {
+      const { error, count } = await supabase
+        .from("jobs")
+        .delete({ count: "exact" })
+        .eq("id", id);
+
+      if (error) {
+        console.warn("[JobsService] Failed to delete job (possible RLS violation):", error.message);
+        return false;
+      }
+
+      if (count === 0) {
+        console.warn(`[JobsService] Delete job '${id}': 0 rows deleted (blocked by RLS or not found)`);
+        return false;
+      }
+
+      await AuditService.log({
+        actorId: "company_actor",
+        actorRole: "company",
+        action: "delete_job_posting",
+        entityType: "job",
+        entityId: id,
+      });
+
+      return true;
+    } catch (err) {
+      console.warn("[JobsService] Unexpected error deleting job:", err);
       return false;
     }
   }

@@ -1,0 +1,560 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SwipeHired — Product Requirement Document v1.1.0</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+  @page { size: A4 portrait; margin: 9mm 11mm 9mm 11mm; }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  body { font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif; color: #1e293b; background-color: #ffffff; line-height: 1.35; font-size: 7.5pt; margin: 0; padding: 0; }
+  .page-break { page-break-before: always; break-before: page; }
+  .avoid-break { page-break-inside: avoid; break-inside: avoid; }
+  .doc-header { background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #064e3b 100%); color: #ffffff; padding: 14px 18px; border-radius: 9px; margin-bottom: 10px; border: 1px solid #334155; }
+  .brand-pill { display: inline-flex; align-items: center; gap: 5px; background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.2); padding: 2.5px 7px; border-radius: 9999px; font-size: 6pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #38bdf8; margin-bottom: 4px; }
+  .brand-pill .dot { width: 5px; height: 5px; background-color: #10b981; border-radius: 50%; }
+  .doc-title { font-size: 15pt; font-weight: 900; line-height: 1.15; margin: 0 0 3px 0; letter-spacing: -0.02em; background: linear-gradient(to right, #ffffff, #f1f5f9, #a7f3d0); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .doc-subtitle { font-size: 7.5pt; color: #cbd5e1; margin: 0 0 7px 0; font-weight: 400; max-width: 95%; line-height: 1.25; }
+  .meta-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; border-top: 1px solid rgba(255, 255, 255, 0.15); padding-top: 5px; }
+  .meta-item { font-size: 6.5pt; }
+  .meta-label { color: #94a3b8; text-transform: uppercase; font-weight: 700; font-size: 5.2pt; letter-spacing: 0.05em; display: block; margin-bottom: 1px; }
+  .meta-value { color: #f8fafc; font-weight: 600; }
+  h1, h2, h3, h4 { color: #0f172a; font-weight: 800; letter-spacing: -0.015em; }
+  h2 { font-size: 9pt; margin: 8px 0 3px 0; padding-bottom: 2px; border-bottom: 1.2px solid #e2e8f0; display: flex; align-items: center; gap: 4px; }
+  h2 .section-num { background: #0f172a; color: #ffffff; font-size: 6pt; padding: 1px 4px; border-radius: 3px; font-weight: 800; }
+  h3 { font-size: 7.5pt; margin: 5px 0 2px 0; color: #1e293b; }
+  h4 { font-size: 6.5pt; margin: 3px 0 1px 0; color: #334155; text-transform: uppercase; letter-spacing: 0.03em; }
+  p { margin: 0 0 3px 0; font-size: 7.2pt; color: #334155; line-height: 1.32; }
+  ul, ol { margin: 1px 0 4px 10px; padding: 0; font-size: 7.2pt; color: #334155; }
+  li { margin-bottom: 1.5px; line-height: 1.28; }
+  strong { color: #0f172a; font-weight: 700; }
+  code { font-family: 'JetBrains Mono', monospace; font-size: 6pt; background: #f1f5f9; color: #0f172a; padding: 1px 2px; border-radius: 2px; border: 1px solid #e2e8f0; }
+  .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 5px; padding: 5px 7px; margin-bottom: 4px; }
+  .card-header { font-size: 7pt; font-weight: 700; color: #0f172a; margin-bottom: 1.5px; display: flex; align-items: center; gap: 3px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; }
+  .kpi-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 4px; padding: 4px 5px; box-shadow: 0 1px 2px rgba(0,0,0,0.03); text-align: center; }
+  .kpi-num { font-size: 10pt; font-weight: 900; color: #059669; line-height: 1.1; margin-bottom: 1px; }
+  .kpi-label { font-size: 5pt; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.04em; }
+  .alert-box { padding: 4px 7px; border-radius: 4px; margin-bottom: 4px; font-size: 6.8pt; border-left: 2.5px solid; line-height: 1.28; }
+  .alert-info { background: #f0fdf4; border-color: #10b981; color: #065f46; }
+  .alert-warning { background: #fffbeb; border-color: #f59e0b; color: #92400e; }
+  .alert-dark { background: #0f172a; border-color: #38bdf8; color: #f8fafc; }
+  .badge { display: inline-block; padding: 1px 4px; border-radius: 9999px; font-size: 5pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+  .badge-emerald { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+  .badge-sky { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
+  .badge-purple { background: #f3e8ff; color: #6b21a8; border: 1px solid #e9d5ff; }
+  .badge-amber { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+  .badge-slate { background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; }
+  table { width: 100%; border-collapse: collapse; margin: 3px 0 5px 0; font-size: 6.5pt; }
+  th { background: #0f172a; color: #ffffff; font-weight: 700; text-align: left; padding: 3px 4.5px; font-size: 5.8pt; letter-spacing: 0.03em; border: 1px solid #1e293b; }
+  th:first-child { border-top-left-radius: 3px; }
+  th:last-child { border-top-right-radius: 3px; }
+  td { padding: 2.5px 4.5px; border: 1px solid #e2e8f0; color: #334155; vertical-align: middle; }
+  tr:nth-child(even) td { background: #f8fafc; }
+  .flow-container { display: flex; gap: 3px; margin: 2px 0 4px 0; }
+  .flow-step { flex: 1; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 3px; padding: 3px; text-align: center; }
+  .flow-step.active { border-color: #10b981; background: #f0fdf4; }
+  .flow-step-num { display: inline-block; width: 12px; height: 12px; line-height: 12px; background: #0f172a; color: #ffffff; font-size: 5pt; font-weight: 800; border-radius: 50%; margin-bottom: 1px; }
+  .flow-step.active .flow-step-num { background: #10b981; }
+  .flow-step-title { font-size: 5pt; font-weight: 700; color: #0f172a; display: block; line-height: 1.05; }
+  .formula-box { background: #0f172a; color: #38bdf8; padding: 4px 7px; border-radius: 3px; font-family: 'JetBrains Mono', monospace; font-size: 6.3pt; margin: 3px 0 4px 0; border: 1px solid #1e293b; line-height: 1.25; }
+  .ac-box { background: #ffffff; border: 1px solid #cbd5e1; border-left: 2.5px solid #0284c7; border-radius: 3px; padding: 3px 5px; margin-bottom: 3px; font-size: 6.5pt; line-height: 1.25; }
+  .ac-title { font-weight: 700; color: #0369a1; margin-bottom: 1px; }
+  .sign-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-top: 5px; }
+  .sign-card { border: 1px solid #cbd5e1; border-radius: 3px; padding: 4px 5px; background: #ffffff; }
+  .sign-title { font-size: 5.5pt; font-weight: 800; color: #0f172a; text-transform: uppercase; margin-bottom: 2px; }
+  .sign-line { border-bottom: 1px dashed #94a3b8; margin: 6px 0 2px 0; }
+  .sign-meta { font-size: 5pt; color: #64748b; }
+  .doc-footer { border-top: 1px solid #e2e8f0; padding-top: 3px; margin-top: 6px; display: flex; justify-content: space-between; font-size: 5pt; color: #94a3b8; }
+</style>
+</head>
+<body>
+
+  <!-- ==================== PAGE 1 ==================== -->
+  <div class="doc-header">
+    <div class="brand-pill"><span class="dot"></span>SwipeHired Engineering · Production PRD</div>
+    <div class="doc-title">SwipeHired — Product Requirements Document</div>
+    <div class="doc-subtitle">Production Specification for AI-Native Recruitment, Career Radar Swiping & 72-Hour Blind Reverse Hiring Marketplace</div>
+    <div class="meta-grid">
+      <div class="meta-item"><span class="meta-label">Document Version</span><span class="meta-value">Version 1.1.0</span></div>
+      <div class="meta-item"><span class="meta-label">Document Status</span><span class="meta-value">Production / Engineering Ready</span></div>
+      <div class="meta-item"><span class="meta-label">Engineering Ownership</span><span class="meta-value">SwipeHired Core Engineering</span></div>
+      <div class="meta-item"><span class="meta-label">Target Release Scope</span><span class="meta-value">Q1 / Q2 2026</span></div>
+    </div>
+  </div>
+
+  <h2><span class="section-num">1</span> Document Control & Governance</h2>
+  <p>This document is the authoritative Product Requirements Document (PRD) for <strong>SwipeHired</strong>, superseding Version 1.0.0. It establishes hardened security boundaries, mathematical scoring normalization, privacy data tiers, and testable acceptance criteria across the entire product ecosystem.</p>
+
+  <h2><span class="section-num">2</span> Executive Summary & Vision</h2>
+  <p><strong>SwipeHired</strong> connects engineering talent with high-growth companies through an AI-powered swipe matching deck, Kanban pipeline management, and an anonymous 72-hour blind reverse marketplace. It eliminates application friction, provides candidate transparency, and accelerates hiring velocity.</p>
+
+  <div class="grid-4" style="margin-bottom: 4px;">
+    <div class="kpi-card"><div class="kpi-num">&lt; 14 Days</div><div class="kpi-label">Time-to-Offer Target</div></div>
+    <div class="kpi-card"><div class="kpi-num">70%</div><div class="kpi-label">Screening Time Reduction</div></div>
+    <div class="kpi-card"><div class="kpi-num">&lt; 5%</div><div class="kpi-label">Target Ghosting SLA</div></div>
+    <div class="kpi-card"><div class="kpi-num">Zero-PII</div><div class="kpi-label">Blind Until Reveal</div></div>
+  </div>
+
+  <div class="alert-box alert-info">
+    <strong>Architecture Commitments:</strong> PII-protected blind marketplace with zero intentional PII exposure before candidate-authorized bid reveal, multi-attribute algorithmic match scoring, tamper-evident placement agreements, and guaranteed anti-ghosting SLA tracking.
+  </div>
+
+  <h2><span class="section-num">3</span> Product Strategy & Measurable KPIs</h2>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 20%;">Metric</th>
+        <th style="width: 26%;">Definition</th>
+        <th style="width: 22%;">Measurement Method</th>
+        <th style="width: 14%;">Target</th>
+        <th style="width: 18%;">Frequency</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>Onboarding Velocity</strong></td><td>Time from resume upload to completed candidate profile.</td><td>Client telemetry timer on parsing workflow.</td><td>&lt; 60 Seconds</td><td>Continuous telemetry</td></tr>
+      <tr><td><strong>Match Precision</strong></td><td>Progression rate for high-score matches (&ge;80%).</td><td>Database stage progression conversion.</td><td>&gt; 85% Precision</td><td>Monthly review</td></tr>
+      <tr><td><strong>SLA Compliance</strong></td><td>Applications resolved or progressed within company SLA.</td><td>Backend SLA deadline evaluation trigger.</td><td>&gt; 95% of Apps</td><td>Daily automated scan</td></tr>
+      <tr><td><strong>Marketplace Acceptance</strong></td><td>Ratio of upfront compensation bids accepted vs declined/expired.</td><td><code>talent_bids</code> status aggregation.</td><td>&gt; 40% Accept Rate</td><td>Weekly telemetry</td></tr>
+      <tr><td><strong>Agreement Completion</strong></td><td>Candidates with tamper-evident e-signatures before radar access.</td><td>Candidate gateway authorization checks.</td><td>100% Compliance</td><td>Per registration</td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:5.5pt; color:#64748b; margin-top:-2px;"><em>*Benchmarks represent internal product objectives and initial engineering targets rather than guaranteed contractual outcomes.</em></p>
+
+  <h2><span class="section-num">4</span> User Personas</h2>
+  <div class="grid-3">
+    <div class="card">
+      <div class="card-header">👨‍💻 Candidate (Alex)</div>
+      <p><strong>Goals:</strong> Fast discovery, salary transparency, blind bias-free evaluation, guaranteed SLA updates.</p>
+      <p><strong>Pain Points:</strong> Lengthy forms, recruiter ghosting, hidden compensation.</p>
+      <p><strong>Permissions:</strong> Edit own profile, sign agreement, swipe jobs, manage applications, list blind profile, accept/counter bids.</p>
+      <p><strong>Success:</strong> Relevant offer in &lt;14 days.</p>
+    </div>
+    <div class="card">
+      <div class="card-header">👩‍💼 Recruiter (Priya)</div>
+      <p><strong>Goals:</strong> Source verified talent, compare candidates head-to-head, automate interview kits & offer letters.</p>
+      <p><strong>Pain Points:</strong> Inbound spam, disjointed ATS/email tools, candidate drop-offs.</p>
+      <p><strong>Permissions:</strong> Post/manage jobs, browse blind marketplace, place bids, manage Kanban, connect SMTP, generate offers.</p>
+      <p><strong>Success:</strong> 70% screening velocity reduction.</p>
+    </div>
+    <div class="card">
+      <div class="card-header">🛡️ Platform Admin</div>
+      <p><strong>Goals:</strong> Security governance, moderate spam jobs, monitor SLA health, audit placement agreements.</p>
+      <p><strong>Pain Points:</strong> Fraudulent job posts, abuse reports, SLA breaches.</p>
+      <p><strong>Permissions:</strong> Telemetry inspection, user/company status overrides, job moderation, dispute resolution.</p>
+      <p><strong>Success:</strong> 99.9% uptime, zero PII leaks.</p>
+    </div>
+  </div>
+
+  <h2><span class="section-num">5</span> User Journeys</h2>
+  <div class="flow-container">
+    <div class="flow-step active"><span class="flow-step-num">1</span><span class="flow-step-title">AI Resume OCR</span></div>
+    <div class="flow-step active"><span class="flow-step-num">2</span><span class="flow-step-title">Sign Agreement</span></div>
+    <div class="flow-step active"><span class="flow-step-num">3</span><span class="flow-step-title">Career Radar Swipe</span></div>
+    <div class="flow-step active"><span class="flow-step-num">4</span><span class="flow-step-title">Blind Talent Bidding</span></div>
+    <div class="flow-step active"><span class="flow-step-num">5</span><span class="flow-step-title">Kanban ATS & SLA</span></div>
+    <div class="flow-step active"><span class="flow-step-num">6</span><span class="flow-step-title">Offer Dispatch</span></div>
+  </div>
+
+  <!-- ==================== PAGE 2 ==================== -->
+  <div class="page-break"></div>
+
+  <h2><span class="section-num">6</span> Core Product Principles</h2>
+  <ul>
+    <li><strong>Speed & Automation:</strong> Prioritize sub-second responsiveness and automated data extraction over manual entry.</li>
+    <li><strong>Privacy by Design:</strong> Enforce zero intentional PII exposure in the blind marketplace until explicit candidate authorization.</li>
+    <li><strong>Anti-Ghosting Accountability:</strong> Provide transparent stage tracking and structured constructive feedback for every applicant.</li>
+    <li><strong>Security Separation:</strong> UI-level route guards are for user experience only. Database and API authorization define the security boundary.</li>
+  </ul>
+
+  <h2><span class="section-num">7</span> Authentication & Authorization Architecture</h2>
+  <div class="alert-box alert-dark">
+    <strong>Multi-Tier Security Model:</strong> Frontend Route Guards + Cloudflare API Authorization + Supabase Row Level Security (RLS) + PostgreSQL Constraints.
+  </div>
+  <ul>
+    <li><strong>Immutable Roles:</strong> <code>candidate</code>, <code>company</code>, and <code>admin</code>. Role modification blocked server-side.</li>
+    <li><strong>Cross-Tenant Isolation:</strong> Recruiters cannot query or mutate data belonging to other companies.</li>
+    <li><strong>Agreement Gateway:</strong> Candidates are locked from active swiping and blind marketplace bidding until a valid signed agreement record is verified server-side.</li>
+  </ul>
+
+  <h2><span class="section-num">8</span> Candidate Experience & Onboarding</h2>
+  <p>Candidates progress through a streamlined onboarding flow: Resume Upload &rarr; OCR Extraction &rarr; Profile Review & Strength Gauge (0–100%) &rarr; Placement Agreement Signing &rarr; Career Radar Swiping.</p>
+
+  <h2><span class="section-num">9</span> AI Resume Parsing & Profile Builder</h2>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-header">15 Structured Parameters</div>
+      <p style="font-size:6.5pt; margin-bottom:0;"><code>fullName</code>, <code>headline</code>, <code>email</code>, <code>phone</code>, <code>location</code>, <code>workPreference</code>, <code>yearsOfExperience</code>, <code>skills[]</code>, <code>possibleRoles[]</code>, <code>education[]</code>, <code>experience[]</code>, <code>projects[]</code>, <code>certifications[]</code>, <code>expectedSalary</code>, <code>bio</code>.</p>
+    </div>
+    <div class="card">
+      <div class="card-header">OCR & Schema Reliability</div>
+      <p style="font-size:6.5pt; margin-bottom:0;">Supports PDF/DOCX/TXT/MD up to 25MB. Dual-stage Affinda OCR and LLM schema validation with raw text fallback to prevent UI crashes.</p>
+    </div>
+  </div>
+
+  <h2><span class="section-num">10</span> Placement Commission Agreement & E-Signature</h2>
+  <p>Candidates execute a digital placement agreement acknowledging a 10% first-year placement commission:</p>
+  <ul>
+    <li><strong>Tamper-Evident Record:</strong> Document ID <code>SH-AGR-YYYY-[HEX]</code> and SHA-256 integrity hash: <code>SHA256-[HASH1]-[HASH2]</code>.</li>
+    <li><strong>Signing Audit Trail:</strong> Captures Signer Name, Timestamp, Signature Style, and Client IP Stamp where legally permissible.</li>
+    <li><strong>Legal Disclaimer:</strong> <em>Legal enforceability depends on applicable jurisdiction, consent flow, and electronic-signature disclosures. Legal review required before production enforcement.</em></li>
+  </ul>
+
+  <h2><span class="section-num">11</span> Career Radar & Algorithmic Matching Engine</h2>
+  <p>The matching engine evaluates compatibility using a deterministic multi-attribute scoring model:</p>
+  <div class="formula-box">
+    RawScore = Base(55) + S_skills(35) + R_role(15) + L_loc(10) + E_exp(8) + C_salary(8) + W_mode(5)  [Max Raw: 136]<br>
+    NormalizedScore = (RawScore / 136) * 100<br>
+    Rule: Requires &ge;1 matching skill OR domain overlap to qualify (Clamped: 60% – 98%). Sub-qualified clamped to &le;40%.
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-header">Deterministic Match Score</div>
+      <p style="font-size:6.5pt; margin-bottom:0;">Authoritative calculation computed server-side from verified profile attributes and job requirements.</p>
+    </div>
+    <div class="card">
+      <div class="card-header">Personalization Layer (Recommendations)</div>
+      <p style="font-size:6.5pt; margin-bottom:0;">Learned Swipe Preferences track candidate actions (apply, skip, save) to re-rank card presentation without altering the objective score.</p>
+    </div>
+  </div>
+
+  <h2><span class="section-num">12</span> Reverse Blind Hiring Marketplace & 72-Hour Bidding</h2>
+  <div class="card">
+    <div class="card-header">3-Tier Candidate Privacy Model</div>
+    <ul>
+      <li><strong>1. Private Profile:</strong> Full candidate record (name, contact info, resume). Accessible only by the candidate and authorized admin.</li>
+      <li><strong>2. Public Profile:</strong> Intentionally shared professional profile attributes.</li>
+      <li><strong>3. Blind Marketplace Profile:</strong> Anonymous handle (e.g. <em>"Anonymous Full Stack Architect #704"</em>), verified skills, YOE, proof-of-work metrics, salary expectations. Zero contact details.</li>
+    </ul>
+  </div>
+  <div class="alert-box alert-warning">
+    <strong>72-Hour Server SLA Source of Truth:</strong> Marketplace bids use server-stamped <code>created_at</code> and <code>expires_at</code> timestamps. Expired bids are rejected server-side regardless of client clock state. Counter-offers preserve full audit history.
+  </div>
+
+  <!-- ==================== PAGE 3 ==================== -->
+  <div class="page-break"></div>
+
+  <h2><span class="section-num">13</span> Recruiter ATS, AI Job Architect & Kanban Pipeline</h2>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-header">AI Job Spec Architect</div>
+      <p>Generates complete job postings from a single-sentence brief, automatically populating department, responsibilities, required skills, and salary bands.</p>
+    </div>
+    <div class="card">
+      <div class="card-header">6-Stage Kanban Pipeline</div>
+      <p>Visual drag-and-drop workflow: <code>Applied</code> &rarr; <code>Screening</code> &rarr; <code>Shortlisted</code> &rarr; <code>Interview</code> &rarr; <code>Offer</code> &rarr; <code>Hired</code> with fast-action SLA badges.</p>
+    </div>
+  </div>
+
+  <h2><span class="section-num">14</span> Candidate Comparison Arena</h2>
+  <p>Enables recruiters to evaluate 2 to 4 candidates head-to-head against any target opening with D3/SVG radar overlays and an AI Comparative Verdict analyzing tradeoffs and top picks.</p>
+
+  <h2><span class="section-num">15</span> Anti-Ghosting SLA & Constructive Feedback</h2>
+  <ul>
+    <li><strong>Company SLA Badges:</strong> Public tiers: 🥇 Gold (&lt;24h), 🥈 Silver (&lt;48h), 🥉 Bronze (&lt;72h).</li>
+    <li><strong>Live Pulse Steps:</strong> Chronological milestone progression visible to candidates.</li>
+    <li><strong>Constructive Rejection Plan:</strong> Automated gap analysis and 30-day learning roadmap upon application rejection.</li>
+  </ul>
+
+  <h2><span class="section-num">16</span> Multi-Channel Communication Architecture</h2>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-header">Platform Transactional Emails</div>
+      <p style="font-size:6.5pt;">Sent via Cloudflare Email Service / platform worker for signup verification, bid alerts, SLA updates, and password resets.</p>
+    </div>
+    <div class="card">
+      <div class="card-header">Recruiter Connected Mailbox & WhatsApp</div>
+      <p style="font-size:6.5pt;">Recruiter-controlled sender addresses via custom SMTP/Gmail connection testing or direct WhatsApp Web templates. Secrets never exposed to client.</p>
+    </div>
+  </div>
+
+  <h2><span class="section-num">17</span> AI Interview Kit & Offer Letter Suite</h2>
+  <ul>
+    <li><strong>AI Interview Kit:</strong> Generates 5–8 role-tailored technical & behavioral questions with structured evaluation rubrics (Below / Meets / Exceeds).</li>
+    <li><strong>AI Offer Letter:</strong> Auto-populates candidate details, CTC breakdown, joining dates, and terms for direct dispatch.</li>
+  </ul>
+
+  <h2><span class="section-num">18</span> Notifications & Real-Time Telemetry</h2>
+  <p>In-app real-time notification engine dispatching alerts for matches, bids, stage transitions, interview schedules, and SLA warnings across all three user roles.</p>
+
+  <h2><span class="section-num">19</span> Admin & Operational Moderation Console</h2>
+  <p>Provides platform operators with real-time vector matching health, job/company moderation queues, abuse reports, and SLA compliance monitoring.</p>
+
+  <h2><span class="section-num">20</span> Monetization Strategy (Current Proposed Pricing)</h2>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 25%;">Revenue Model</th>
+        <th style="width: 25%;">Proposed Pricing</th>
+        <th style="width: 50%;">Scope & Commercial Terms</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>10% Placement Commission</strong></td>
+        <td>10% First-Year CTC</td>
+        <td>Pre-authorized digital agreement. Invoiced upon verified candidate placement. (TBD: Payment terms & refund window).</td>
+      </tr>
+      <tr>
+        <td><strong>Recruiter Pro Subscription</strong></td>
+        <td>$199 / recruiter / mo</td>
+        <td>Unlimited job postings, 25 monthly blind marketplace bids, custom SMTP connection, priority matching.</td>
+      </tr>
+      <tr>
+        <td><strong>Enterprise ATS Bridge</strong></td>
+        <td>$999+ / company / mo</td>
+        <td>Greenhouse/Lever sync, dedicated account manager, custom SLAs, multi-seat team management.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ==================== PAGE 4 ==================== -->
+  <div class="page-break"></div>
+
+  <h2><span class="section-num">21</span> Technical Architecture Model</h2>
+  <div class="alert-box alert-dark">
+    <strong>Production Architecture:</strong> React 19 (Vite) &rarr; Cloudflare Pages &rarr; Cloudflare Workers / Functions &rarr; AI APIs / Business Logic / Email Service &rarr; Supabase (PostgreSQL, Auth, Storage, Realtime).<br>
+    <em>Note: <code>server.ts</code> serves as a local development proxy and test harness.</em>
+  </div>
+
+  <h2><span class="section-num">22</span> Supabase Database Schema (13 Core Tables)</h2>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 20%;">Table Name</th>
+        <th style="width: 50%;">Key Columns & Constraints</th>
+        <th style="width: 30%;">Security / RLS Rule</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><code>profiles</code></td><td><code>id (PK)</code>, <code>email (UNIQUE)</code>, <code>role (CHECK)</code>, <code>created_at</code>, <code>updated_at</code></td><td>Self-read/write; role immutable by client</td></tr>
+      <tr><td><code>candidates</code></td><td><code>id (PK)</code>, <code>user_id (FK)</code>, <code>skills[]</code>, <code>commission_agreement_signed</code>, <code>signature_hash</code></td><td>Candidate owner write; public read (non-PII)</td></tr>
+      <tr><td><code>companies</code></td><td><code>id (PK)</code>, <code>user_id (FK)</code>, <code>company_name</code>, <code>email_integration (JSONB)</code>, <code>is_verified</code></td><td>Company owner write; public browsable</td></tr>
+      <tr><td><code>jobs</code></td><td><code>id (PK)</code>, <code>company_id (FK)</code>, <code>title</code>, <code>salary</code>, <code>required_skills[]</code>, <code>status (CHECK)</code></td><td>Recruiter write; public read (active jobs)</td></tr>
+      <tr><td><code>applications</code></td><td><code>id (PK)</code>, <code>job_id (FK)</code>, <code>candidate_id (FK)</code>, <code>status</code>, <code>match_score</code>, <code>timeline</code></td><td>Candidate (own) & Company (own jobs) only</td></tr>
+      <tr><td><code>blind_talent_profiles</code></td><td><code>id (PK)</code>, <code>candidate_id (FK, UNIQUE)</code>, <code>anonymous_handle</code>, <code>verified_skills</code></td><td>Public read (PII strictly scrubbed)</td></tr>
+      <tr><td><code>talent_bids</code></td><td><code>id (PK)</code>, <code>blind_talent_id (FK)</code>, <code>company_id (FK)</code>, <code>salary_offer</code>, <code>expires_at</code></td><td>Target candidate & bidding company only</td></tr>
+      <tr><td><code>swipe_interactions</code></td><td><code>id (PK)</code>, <code>candidate_id (FK)</code>, <code>job_id (FK)</code>, <code>action (CHECK)</code>, <code>created_at</code></td><td>Candidate owner & system only</td></tr>
+      <tr><td><code>company_slas</code></td><td><code>company_id (FK, UNIQUE)</code>, <code>avg_response_hours</code>, <code>badge_tier</code>, <code>ghosting_rate</code></td><td>Public read; system computed</td></tr>
+      <tr><td><code>notifications</code></td><td><code>id (PK)</code>, <code>recipient_id</code>, <code>role</code>, <code>title</code>, <code>message</code>, <code>is_read</code></td><td>Recipient owner only</td></tr>
+      <tr><td><code>email_templates</code></td><td><code>id (PK)</code>, <code>company_id (FK)</code>, <code>category</code>, <code>subject</code>, <code>body_template</code></td><td>Company owner only</td></tr>
+      <tr><td><code>whatsapp_templates</code></td><td><code>id (PK)</code>, <code>company_id (FK)</code>, <code>category</code>, <code>message_template</code></td><td>Company owner only</td></tr>
+      <tr><td><code>admin_reports</code></td><td><code>id (PK)</code>, <code>target_type</code>, <code>target_id</code>, <code>reason</code>, <code>status</code></td><td>Reporter insert; admin review only</td></tr>
+    </tbody>
+  </table>
+
+  <h2><span class="section-num">23</span> Security, Data Privacy & Governance</h2>
+  <ul>
+    <li><strong>PII Isolation:</strong> Candidate names, emails, and phones are excluded from all blind marketplace API responses.</li>
+    <li><strong>Credential Protection:</strong> SMTP passwords and API secrets stored securely; never returned in client bundles.</li>
+    <li><strong>Data Governance:</strong> Candidate profile export and deletion mechanisms compliant with applicable data privacy regulations.</li>
+  </ul>
+
+  <h2><span class="section-num">24</span> API Security & Validation Standards</h2>
+  <p>All protected endpoints must enforce Authentication, Authorization, Input Validation, Rate Limiting, and Structured Error Handling. Stack traces and database errors are suppressed from client responses.</p>
+
+  <h2><span class="section-num">25</span> AI Reliability & Provider Fallbacks</h2>
+  <ul>
+    <li><strong>Payload Limits:</strong> Maximum upload size of 25MB on resume parser endpoints.</li>
+    <li><strong>Timeout & Retries:</strong> 8-second AI timeout with exponential backoff and schema fallback defaults.</li>
+  </ul>
+
+  <h2><span class="section-num">26</span> Background Processing Architecture</h2>
+  <p>Heavy operations (bulk resume parsing, batch matching, email campaigns, report generation) execute asynchronously through queue/worker architectures to preserve sub-second UI responsiveness.</p>
+
+  <h2><span class="section-num">27</span> Audit Logging & Observability</h2>
+  <p>Immutable audit logs record security events, application status changes, offer creations, marketplace reveals, and agreement signings without capturing raw credentials.</p>
+
+  <h2><span class="section-num">28</span> Performance & Scalability SLAs</h2>
+  <ul>
+    <li><strong>Card Swipe Response:</strong> &le; 16ms render time (60 FPS smooth motion).</li>
+    <li><strong>Algorithmic Match Scoring:</strong> &le; 50ms computation latency.</li>
+    <li><strong>Resume Parsing & Structuring:</strong> &le; 5.0s turnaround time.</li>
+  </ul>
+
+  <!-- ==================== PAGE 5 ==================== -->
+  <div class="page-break"></div>
+
+  <h2><span class="section-num">29</span> Testable Acceptance Criteria (AC)</h2>
+
+  <div class="ac-box">
+    <div class="ac-title">AC-AUTH — Authentication & Role Isolation</div>
+    <strong>Given</strong> an authenticated candidate user, <strong>when</strong> they attempt to access recruiter routes or API endpoints, <strong>then</strong> the server must reject the request with HTTP 403 and the UI must redirect to the candidate radar.
+  </div>
+
+  <div class="ac-box">
+    <div class="ac-title">AC-AGREE — Mandatory Placement Agreement</div>
+    <strong>Given</strong> a candidate who has not signed the agreement, <strong>when</strong> they attempt to browse radar jobs or list a blind profile, <strong>then</strong> access is blocked until a valid SHA-256 e-signature record is verified server-side.
+  </div>
+
+  <div class="ac-box">
+    <div class="ac-title">AC-MARKET-01 — Blind Marketplace Anonymity</div>
+    <strong>Given</strong> a recruiter browsing the blind marketplace, <strong>when</strong> they inspect a candidate profile, <strong>then</strong> the API response must not contain candidate name, email, phone, or photo.
+  </div>
+
+  <div class="ac-box">
+    <div class="ac-title">AC-MARKET-02 — 72-Hour Bid Expiration</div>
+    <strong>Given</strong> a marketplace bid past its <code>expires_at</code> timestamp, <strong>when</strong> a candidate attempts to accept it, <strong>then</strong> the server must reject the action with an <code>EXPIRED_BID</code> error.
+  </div>
+
+  <div class="ac-box">
+    <div class="ac-title">AC-MARKET-03 — Authorized Identity Reveal</div>
+    <strong>Given</strong> a valid, unexpired bid, <strong>when</strong> the candidate clicks "Accept", <strong>then</strong> candidate contact information is unmasked to the bidding company and an application record is initialized.
+  </div>
+
+  <div class="ac-box">
+    <div class="ac-title">AC-MATCH — Algorithmic Match Calculation</div>
+    <strong>Given</strong> a candidate and a job opening, <strong>when</strong> match scoring runs, <strong>then</strong> the score must equal the normalized sum of domain, skill, role, location, experience, and salary weights.
+  </div>
+
+  <div class="ac-box">
+    <div class="ac-title">AC-ATS — Kanban Drag-and-Drop Transition</div>
+    <strong>Given</strong> an applicant card dragged to a new stage, <strong>when</strong> dropped, <strong>then</strong> the application status updates in PostgreSQL, an audit record is created, and the candidate is notified.
+  </div>
+
+  <div class="ac-box">
+    <div class="ac-title">AC-SLA — Constructive Feedback on Rejection</div>
+    <strong>Given</strong> an applicant rejected by a recruiter, <strong>when</strong> the rejection is confirmed, <strong>then</strong> the system generates structured gap feedback and a 30-day learning roadmap for the candidate.
+  </div>
+
+  <h2><span class="section-num">30</span> Non-Functional Requirements (NFRs)</h2>
+  <ul>
+    <li><strong>Security:</strong> Full RLS coverage, parameterized database queries, strict CORS, and encrypted credential storage.</li>
+    <li><strong>Accessibility:</strong> WCAG 2.1 AA compliance, full keyboard navigation, accessible form inputs, and sufficient contrast ratios.</li>
+    <li><strong>Observability:</strong> Structured JSON application logs, error telemetry, and vector latency metrics.</li>
+  </ul>
+
+  <h2><span class="section-num">31</span> Current Release Scope (Phase 1 — Production)</h2>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-header">In Scope (Current Release)</div>
+      <ul>
+        <li>AI Resume OCR Parser (Affinda / Eden AI).</li>
+        <li>10% Placement E-Signature Engine.</li>
+        <li>Career Radar Swipe Deck & Matching Engine.</li>
+        <li>72-Hour Blind Reverse Marketplace.</li>
+        <li>Recruiter ATS & Kanban Pipeline.</li>
+        <li>Candidate Comparison Arena & AI Verdict.</li>
+        <li>Custom SMTP Connection Testing & WhatsApp.</li>
+        <li>Anti-Ghosting SLA & Constructive Feedback.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-header">Out of Scope for Current Release</div>
+      <ul>
+        <li>Autonomous AI voice screening calls.</li>
+        <li>Third-party ATS bidirectional sync (Greenhouse, Lever).</li>
+        <li>Web3 cryptographic skill credentials.</li>
+        <li>Multi-currency global salary bidding.</li>
+        <li>Native iOS and Android mobile binaries.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2><span class="section-num">32</span> Future Roadmap</h2>
+  <ul>
+    <li><strong>Phase 2 (Q3 2026):</strong> Automated AI Voice Interview Screener, Webhook alerts (Slack/Discord), Greenhouse/Lever ATS connectors.</li>
+    <li><strong>Phase 3 (Q4 2026):</strong> Cryptographic Proof-of-Work skill credentials, multi-currency global compensation, and native mobile apps.</li>
+  </ul>
+
+  <h2><span class="section-num">33</span> Risk Matrix & Mitigation Strategies</h2>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 22%;">Identified Risk</th>
+        <th style="width: 14%;">Severity</th>
+        <th style="width: 64%;">Engineering & Operational Mitigation</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Blind Identity Leak</strong></td>
+        <td><span class="badge badge-amber">Critical</span></td>
+        <td>Zero-PII server-side sanitization. Database RLS prevents unauthorized queries before bid acceptance.</td>
+      </tr>
+      <tr>
+        <td><strong>Recruiter Ghosting</strong></td>
+        <td><span class="badge badge-amber">High</span></td>
+        <td>Public SLA trust badges (Gold/Silver/Bronze) and automated stage escalation triggers.</td>
+      </tr>
+      <tr>
+        <td><strong>Commission Dispute</strong></td>
+        <td><span class="badge badge-slate">Medium</span></td>
+        <td>Tamper-evident signing record with SHA-256 hash and IP stamp. Pre-production legal review.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2><span class="section-num">34</span> Open Product & Legal Decisions</h2>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 25%;">Decision Item</th>
+        <th style="width: 15%;">Owner</th>
+        <th style="width: 12%;">Status</th>
+        <th style="width: 48%;">Impact & Considerations</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Commission Payer Model</strong></td>
+        <td>Product / Legal</td>
+        <td><span class="badge badge-amber">TBD</span></td>
+        <td>Determine whether 10% fee is candidate-authorized direct fee or employer-invoiced placement fee.</td>
+      </tr>
+      <tr>
+        <td><strong>Refund & Guarantee Window</strong></td>
+        <td>Finance / Legal</td>
+        <td><span class="badge badge-amber">TBD</span></td>
+        <td>Define 30/60/90 day candidate retention and replacement policy upon early employment termination.</td>
+      </tr>
+      <tr>
+        <td><strong>Personalization Threshold</strong></td>
+        <td>Data / Engineering</td>
+        <td><span class="badge badge-sky">In Review</span></td>
+        <td>Establish minimum swipe interaction count (e.g. 15 swipes) before personalized re-ranking activates.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2><span class="section-num">35</span> Related Engineering Documents</h2>
+  <p>This PRD is supported by companion technical specifications in the project repository: <code>ARCHITECTURE.md</code>, <code>DATABASE.md</code>, <code>SECURITY.md</code>, <code>API_SPEC.md</code>, <code>ACCEPTANCE_CRITERIA.md</code>, and <code>ROADMAP.md</code>.</p>
+
+  <h2><span class="section-num">36</span> Internal Sign-Off & Verification</h2>
+  <div class="sign-grid">
+    <div class="sign-card">
+      <div class="sign-title">Product Architecture</div>
+      <div class="sign-line"></div>
+      <div class="sign-meta">
+        <strong>SwipeHired Product Lead</strong><br>
+        Status: Engineering Ready · Aug 2026
+      </div>
+    </div>
+    <div class="sign-card">
+      <div class="sign-title">Full-Stack Engineering</div>
+      <div class="sign-line"></div>
+      <div class="sign-meta">
+        <strong>SwipeHired Engineering Lead</strong><br>
+        Status: Implementation Verified · Aug 2026
+      </div>
+    </div>
+    <div class="sign-card">
+      <div class="sign-title">Security & Governance</div>
+      <div class="sign-line"></div>
+      <div class="sign-meta">
+        <strong>Platform Security Lead</strong><br>
+        Status: Security Boundaries Approved · Aug 2026
+      </div>
+    </div>
+  </div>
+
+  <div class="doc-footer">
+    <span>SwipeHired Inc. · Production Specification</span>
+    <span>Product Requirements Document · Version 1.1.0</span>
+    <span>Page 5 of 5</span>
+  </div>
+
+</body>
+</html>

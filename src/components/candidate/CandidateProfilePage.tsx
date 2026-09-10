@@ -207,10 +207,10 @@ export const CandidateProfilePage: React.FC = () => {
             </div>
             <div>
               <span className="font-bold text-slate-900 block">
-                {candidate.resumeFilename || "Raj_Patel_Resume.pdf"}
+                {candidate.resumeFilename || "Candidate_Resume.pdf"}
               </span>
               <span className="text-[11px] text-slate-500">
-                Uploaded and indexed by Gemini Vector Parser
+                Uploaded and indexed by AI Resume Parser
               </span>
             </div>
           </div>
@@ -220,6 +220,41 @@ export const CandidateProfilePage: React.FC = () => {
             className="text-xs font-bold text-emerald-700 hover:text-emerald-900 cursor-pointer"
           >
             Replace Resume →
+          </button>
+        </div>
+
+        {/* Mandatory Placement & 10% Commission Agreement Card */}
+        <div className="p-5 bg-gradient-to-r from-emerald-50 via-teal-50 to-slate-50 rounded-2xl border border-emerald-200/90 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-xs">
+          <div className="flex items-start gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="font-black text-slate-900 text-sm">
+                  10% Placement Commission Agreement
+                </span>
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  {candidate.commissionAgreementSigned ? "E-Signed & Active" : "Action Required"}
+                </span>
+              </div>
+              <p className="text-slate-600">
+                {candidate.commissionAgreementSigned ? (
+                  <>
+                    Ref: <span className="font-mono font-bold text-slate-800">{candidate.commissionAgreementDocId || "SH-AGR-VERIFIED"}</span> · Signed by <strong className="text-slate-900">{candidate.commissionAgreementSignature?.signerName || candidate.fullName}</strong> on {candidate.commissionAgreementSignedAt ? new Date(candidate.commissionAgreementSignedAt).toLocaleDateString() : "Active"}
+                  </>
+                ) : (
+                  "You must review and e-sign the 10% success fee placement agreement to activate radar matching."
+                )}
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setActiveView("candidate-agreement")}
+            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shrink-0 shadow-xs"
+          >
+            {candidate.commissionAgreementSigned ? "View / Print Agreement →" : "Sign Agreement →"}
           </button>
         </div>
       </div>

@@ -54,6 +54,7 @@ export const CompanyJobCandidatesModal: React.FC<CompanyJobCandidatesModalProps>
   job,
 }) => {
   const {
+    company,
     applications,
     allCandidates,
     jobs,
@@ -86,11 +87,17 @@ export const CompanyJobCandidatesModal: React.FC<CompanyJobCandidatesModalProps>
   const [selectedInterviewKitApp, setSelectedInterviewKitApp] = useState<Application | null>(null);
   const [selectedOfferApp, setSelectedOfferApp] = useState<Application | null>(null);
 
-  if (!isOpen || !job) return null;
+  // Guard against inspecting competitor jobs
+  if (!isOpen || !job || (company.id && job.companyId && job.companyId !== company.id)) return null;
 
   // Filter applications for this specific job (excluding rejected, hidden, or deleted from company view)
   const jobApplications = applications.filter(
-    (app) => app.jobId === job.id && !app.hiddenFromCompany && !app.deletedByCompany && app.status !== "rejected"
+    (app) =>
+      app.jobId === job.id &&
+      (!company.id || app.companyId === company.id) &&
+      !app.hiddenFromCompany &&
+      !app.deletedByCompany &&
+      app.status !== "rejected"
   );
 
   // Helper to compute matched & missing skills dynamically if not pre-populated

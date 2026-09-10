@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useCallback, useRef } from "react";
 import confetti from "canvas-confetti";
 import {
   UserRole,
+  AuthStatus,
   CandidateProfile,
   CompanyProfile,
   Job,
@@ -46,6 +47,7 @@ export const emptyCandidateProfile: CandidateProfile = {
   profilePhoto: "",
   profileStrength: 0,
   isCompleted: false,
+  commissionAgreementSigned: false,
 };
 
 export const emptyCompanyProfile: CompanyProfile = {
@@ -114,6 +116,7 @@ export type ActiveView =
   | "candidate-login"
   | "candidate-onboarding"
   | "candidate-review"
+  | "candidate-agreement"
   | "candidate-radar"
   | "candidate-jobs"
   | "candidate-job-detail"
@@ -144,7 +147,9 @@ interface AppContextType {
   isSupabaseSyncing: boolean;
   refreshFromSupabase: () => Promise<void>;
 
-  // Supabase Auth
+  // Supabase Auth & State Machine
+  authStatus: AuthStatus;
+  isAuthLoading: boolean;
   authUser: any | null;
   authSignUp: (params: {
     email: string;
@@ -193,6 +198,16 @@ interface AppContextType {
   setCandidate: React.Dispatch<React.SetStateAction<CandidateProfile>>;
   missingProfileFields: string[];
   isCandidateProfileComplete: boolean;
+  signCommissionAgreement: (
+    signatureData: {
+      signerName: string;
+      signatureStyle?: string;
+      signatureHash: string;
+      timestamp: string;
+      ipStamp?: string;
+    },
+    docId?: string
+  ) => Promise<boolean>;
 
   // Company State
   company: CompanyProfile;
@@ -297,9 +312,12 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Supabase connection state
+  // Supabase connection & Auth Lifecycle State Machine
   const [isSupabaseConnected, setIsSupabaseConnected] = useState<boolean>(true);
   const [isSupabaseSyncing, setIsSupabaseSyncing] = useState<boolean>(false);
+  const [authStatus, setAuthStatus] = useState<AuthStatus>("AUTH_LOADING");
+  const isAuthLoading = authStatus === "AUTH_LOADING";
+  const [authUser, setAuthUser] = useState<any | null>(null);
 
   // Local storage persisted state or defaults
   const [role, setRole] = useState<UserRole>(() => {
@@ -417,12 +435,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           SupabaseService.getWhatsAppTemplates(),
         ]);
 
+        let activeCompanyId = company.id;
         if (authUser) {
           if (role === "company" && dbCompanies && dbCompanies.length > 0) {
             const currentCompany = dbCompanies.find(
               (c) => c.userId === authUser.id || c.email === authUser.email || (company.id && c.id === company.id)
             );
-            if (currentCompany) setCompany(currentCompany);
+            if (currentCompany) {
+              setCompany(currentCompany);
+              activeCompanyId = currentCompany.id;
+            }
           } else if (role === "candidate" && dbCandidates && dbCandidates.length > 0) {
             const currentCandidate = dbCandidates.find(
               (c) => c.userId === authUser.id || c.email === authUser.email || (candidate.id && c.id === candidate.id)
@@ -432,7 +454,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         } else {
           if (company.id && dbCompanies && dbCompanies.length > 0) {
             const currentCompany = dbCompanies.find((c) => c.id === company.id);
-            if (currentCompany) setCompany(currentCompany);
+            if (currentCompany) {
+              setCompany(currentCompany);
+              activeCompanyId = currentCompany.id;
+            }
           }
           if (candidate.id && dbCandidates && dbCandidates.length > 0) {
             const currentCandidate = dbCandidates.find((c) => c.id === candidate.id);
@@ -440,8 +465,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           }
         }
         setAllCandidates(dbCandidates || []);
-        setJobs(dbJobs || []);
-        setApplications(dbApps || []);
+        if (role === "company" && activeCompanyId) {
+          setJobs((dbJobs || []).filter((j) => j.companyId === activeCompanyId));
+          setApplications((dbApps || []).filter((a) => a.companyId === activeCompanyId));
+        } else {
+          setJobs(dbJobs || []);
+          setApplications(dbApps || []);
+        }
         setBlindTalentProfiles(dbBlind || []);
         setTalentBids(dbBids || []);
         setCompanySLAs(dbSlas || {});
@@ -456,7 +486,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     } finally {
       setIsSupabaseSyncing(false);
     }
-  }, [candidate.id, company.id]);
+  }, [candidate.id, company.id, authUser, role]);
 
   useEffect(() => {
     refreshFromSupabase();
@@ -907,6 +937,36 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
   };
 
+  // Sign Mandatory 10% Placement Commission Agreement
+  const signCommissionAgreement = async (
+    signatureData: {
+      signerName: string;
+      signatureStyle?: string;
+      signatureHash: string;
+      timestamp: string;
+      ipStamp?: string;
+    },
+    docId?: string
+  ): Promise<boolean> => {
+    const generatedDocId =
+      docId ||
+      `SH-AGR-${new Date().getFullYear()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+    const timestamp = signatureData.timestamp || new Date().toISOString();
+
+    updateCandidate({
+      commissionAgreementSigned: true,
+      commissionAgreementSignedAt: timestamp,
+      commissionAgreementDocId: generatedDocId,
+      commissionAgreementSignature: {
+        ...signatureData,
+        timestamp,
+      },
+      isCompleted: true,
+    });
+
+    return true;
+  };
+
   // Update Company
   const updateCompany = (updated: Partial<CompanyProfile>) => {
     setCompany((prev) => {
@@ -942,10 +1002,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const updateJob = (id: string, updated: Partial<Job>) => {
+    const target = jobs.find((j) => j.id === id);
+    if (role === "company" && target && company.id && target.companyId !== company.id) {
+      console.error("[AppContext] Unauthorized update: Job belongs to another company");
+      return;
+    }
+    // Prevent changing companyId
+    const safeUpdated = { ...updated };
+    if (target) {
+      safeUpdated.companyId = target.companyId;
+    }
+
     setJobs((prev) =>
       prev.map((j) => {
         if (j.id !== id) return j;
-        const next = { ...j, ...updated, updatedAt: new Date().toISOString() };
+        const next = { ...j, ...safeUpdated, updatedAt: new Date().toISOString() };
         SupabaseService.saveJob(next).catch(console.warn);
         return next;
       })
@@ -953,15 +1024,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const deleteJob = (id: string) => {
+    const target = jobs.find((j) => j.id === id);
+    if (role === "company" && target && company.id && target.companyId !== company.id) {
+      console.error("[AppContext] Unauthorized delete: Job belongs to another company");
+      return;
+    }
     setJobs((prev) => prev.filter((j) => j.id !== id));
+    SupabaseService.deleteJob(id).catch(console.warn);
   };
 
   const duplicateJob = (id: string) => {
     const target = jobs.find((j) => j.id === id);
     if (!target) return;
+    if (role === "company" && company.id && target.companyId !== company.id) {
+      console.error("[AppContext] Unauthorized duplicate: Job belongs to another company");
+      return;
+    }
     const duplicated: Job = {
       ...target,
       id: `job_${Date.now()}`,
+      companyId: company.id || target.companyId,
       title: `${target.title} (Copy)`,
       createdAt: new Date().toISOString(),
       status: "draft",
@@ -971,6 +1053,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const toggleJobStatus = (id: string, newStatus: Job["status"]) => {
+    const target = jobs.find((j) => j.id === id);
+    if (role === "company" && target && company.id && target.companyId !== company.id) {
+      console.error("[AppContext] Unauthorized status change: Job belongs to another company");
+      return;
+    }
     updateJob(id, { status: newStatus });
   };
 
@@ -1477,7 +1564,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return "AI Vector Radar initialized based on your resume skills and Ahmedabad hybrid preferences.";
     }
     const preferredSkills = candidate.learnedPreferences?.preferredSkills?.slice(0, 3).join(", ");
-    return `AI Radar tuned from ${swipesCount} swipe actions: Prioritizing ${preferredSkills || "React & Node"} roles in ${candidate.location.split(",")[0]}.`;
+    const locationCity = candidate.location ? candidate.location.split(",")[0] : "your preferred location";
+    return `AI Radar tuned from ${swipesCount} swipe actions: Prioritizing ${preferredSkills || "React & Node"} roles in ${locationCity}.`;
   }, [candidate]);
 
   const resetSwipes = () => {
@@ -1588,31 +1676,48 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     );
   };
 
-  const [authUser, setAuthUser] = useState<any | null>(null);
+  const sessionSeqRef = useRef<number>(0);
 
   // Listen for auth state changes (e.g., email confirmation link callback / OAuth Google redirect / session restore)
   useEffect(() => {
     const handleAuthSession = async (session: any, _event?: string) => {
-      if (!session?.user) return;
+      const currentSeq = ++sessionSeqRef.current;
+      if (!session?.user) {
+        setAuthUser(null);
+        setRole(null);
+        setAuthStatus("UNAUTHENTICATED");
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("swipehired_role");
+        }
+        return;
+      }
 
       setAuthUser(session.user);
 
       const savedOauthRole =
         typeof window !== "undefined"
-          ? (localStorage.getItem("swipehired_oauth_role") as UserRole | null)
+          ? ((new URLSearchParams(window.location.search).get("oauth_role") as UserRole | null) ||
+            (window.location.hash
+              ? (new URLSearchParams(window.location.hash.replace(/^#/, "?")).get("oauth_role") as UserRole | null)
+              : null) ||
+            (sessionStorage.getItem("swipehired_oauth_role") as UserRole | null) ||
+            (localStorage.getItem("swipehired_oauth_role") as UserRole | null))
           : null;
 
       const profileResult = await SupabaseService.fetchUserProfile(
         session.user,
         (savedOauthRole as any) || undefined
       );
-      const resolvedRole: UserRole =
-        profileResult.role || savedOauthRole || "candidate";
-      setRole(resolvedRole);
-      localStorage.setItem("swipehired_role", resolvedRole);
 
-      if (typeof window !== "undefined" && savedOauthRole) {
+      // Discard stale responses if a newer auth event fired
+      if (currentSeq !== sessionSeqRef.current) return;
+
+      const resolvedRole: UserRole = profileResult.role;
+
+      if (typeof window !== "undefined") {
         localStorage.removeItem("swipehired_oauth_role");
+        sessionStorage.removeItem("swipehired_oauth_role");
+        document.cookie = "swipehired_oauth_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;";
       }
 
       // Check if user is returning from a fresh OAuth callback
@@ -1627,49 +1732,79 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         window.history.replaceState(null, "", window.location.pathname);
       }
 
-      // Sync fetched profiles into state
-      if (resolvedRole === "company" && profileResult.companyProfile) {
-        setCompany(profileResult.companyProfile);
-      } else if (resolvedRole === "candidate" && profileResult.candidateProfile) {
-        setCandidate(profileResult.candidateProfile);
+      if (resolvedRole === "company") {
+        setRole("company");
+        setAuthStatus("AUTHENTICATED_COMPANY");
+        localStorage.setItem("swipehired_role", "company");
+        if (profileResult.companyProfile) {
+          setCompany(profileResult.companyProfile);
+        }
+
+        // Check if view needs to be routed to company workspace
+        const currentSavedView = localStorage.getItem("swipehired_activeView") || "landing";
+        const isCandidateOrAuthView =
+          currentSavedView.startsWith("candidate-") ||
+          currentSavedView === "landing" ||
+          currentSavedView === "auth-select" ||
+          currentSavedView === "company-login" ||
+          currentSavedView === "company-signup";
+
+        if (isFreshOAuthCallback || isCandidateOrAuthView) {
+          setActiveView(profileResult.companyProfile?.isCompleted ? "company-cockpit" : "company-onboarding");
+        }
+      } else if (resolvedRole === "candidate") {
+        setRole("candidate");
+        setAuthStatus("AUTHENTICATED_CANDIDATE");
+        localStorage.setItem("swipehired_role", "candidate");
+        if (profileResult.candidateProfile) {
+          setCandidate(profileResult.candidateProfile);
+        }
+
+        // Check if view needs to be routed to candidate workspace
+        const currentSavedView = localStorage.getItem("swipehired_activeView") || "landing";
+        const isCompanyOrAuthView =
+          currentSavedView.startsWith("company-") ||
+          currentSavedView === "landing" ||
+          currentSavedView === "auth-select" ||
+          currentSavedView === "candidate-login" ||
+          currentSavedView === "candidate-signup";
+
+        if (isFreshOAuthCallback || isCompanyOrAuthView) {
+          if (!profileResult.candidateProfile?.isCompleted) {
+            setActiveView("candidate-onboarding");
+          } else if (!profileResult.candidateProfile?.commissionAgreementSigned) {
+            setActiveView("candidate-agreement");
+          } else {
+            setActiveView("candidate-radar");
+          }
+        }
+      } else if (resolvedRole === "admin") {
+        setRole("admin");
+        setAuthStatus("AUTHENTICATED_ADMIN");
+        localStorage.setItem("swipehired_role", "admin");
+        setActiveView("admin-overview");
+      } else {
+        setRole(null);
+        setAuthStatus("ROLE_UNSET");
+        setActiveView("auth-select");
       }
 
-      // Only redirect or switch view if returning from an explicit fresh OAuth login or if the user is currently on an auth/landing page
-      const currentSavedView = localStorage.getItem("swipehired_activeView") || "landing";
-      const isAuthView =
-        currentSavedView === "candidate-login" ||
-        currentSavedView === "candidate-signup" ||
-        currentSavedView === "company-login" ||
-        currentSavedView === "company-signup" ||
-        currentSavedView === "auth-select" ||
-        currentSavedView === "landing";
-
-      if (isFreshOAuthCallback || isAuthView) {
-        if (resolvedRole === "company") {
-          setActiveView(profileResult.companyProfile?.isCompleted ? "company-cockpit" : "company-onboarding");
-        } else if (resolvedRole === "candidate") {
-          setActiveView(profileResult.candidateProfile?.isCompleted ? "candidate-radar" : "candidate-onboarding");
-        } else if (resolvedRole === "admin") {
-          setActiveView("admin-overview");
-        }
-
-        // Only celebrate on an explicit fresh OAuth login callback, never on page reloads or passive session restore
-        if (isFreshOAuthCallback) {
-          triggerCelebration();
-          addNotification({
-            recipientId:
-              resolvedRole === "company"
-                ? profileResult.companyProfile?.id || "comp"
-                : profileResult.candidateProfile?.id || "cand",
-            role: resolvedRole === "company" ? "company" : "candidate",
-            title: resolvedRole === "company" ? "🏢 Welcome to SwipeHired!" : "✨ Welcome to SwipeHired!",
-            message:
-              resolvedRole === "company"
-                ? "Recruiter workspace authenticated successfully."
-                : "Authenticated successfully. Your candidate radar is ready.",
-            type: "status",
-          });
-        }
+      // Only celebrate on an explicit fresh OAuth login callback, never on passive page reloads
+      if (isFreshOAuthCallback && resolvedRole) {
+        triggerCelebration();
+        addNotification({
+          recipientId:
+            resolvedRole === "company"
+              ? profileResult.companyProfile?.id || "comp"
+              : profileResult.candidateProfile?.id || "cand",
+          role: resolvedRole === "company" ? "company" : "candidate",
+          title: resolvedRole === "company" ? "🏢 Welcome to SwipeHired!" : "✨ Welcome to SwipeHired!",
+          message:
+            resolvedRole === "company"
+              ? "Recruiter workspace authenticated successfully."
+              : "Authenticated successfully. Your candidate radar is ready.",
+          type: "status",
+        });
       }
     };
 
@@ -1679,6 +1814,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const currentSession = await SupabaseService.getSession();
         if (currentSession?.user) {
           await handleAuthSession(currentSession, "INITIAL_SESSION");
+        } else {
+          setAuthStatus("UNAUTHENTICATED");
         }
 
         // 2. Auth state change listener
@@ -1694,6 +1831,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               await handleAuthSession(session, event);
             } else if (event === "SIGNED_OUT") {
               setAuthUser(null);
+              setRole(null);
+              setAuthStatus("UNAUTHENTICATED");
             }
           }
         );
@@ -1703,6 +1842,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         };
       } catch (err) {
         console.warn("Auth state change listener notice:", err);
+        setAuthStatus("UNAUTHENTICATED");
       }
     };
 
@@ -1768,34 +1908,40 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       };
     }
     setAuthUser(res.user);
-    const resolvedRole: UserRole = res.role || params.roleHint || "candidate";
+    const resolvedRole: UserRole = res.role;
     setRole(resolvedRole);
-    localStorage.setItem("swipehired_role", resolvedRole);
+    if (resolvedRole) {
+      localStorage.setItem("swipehired_role", resolvedRole);
+    }
 
     if (resolvedRole === "company") {
+      setAuthStatus("AUTHENTICATED_COMPANY");
       if (res.companyProfile) {
         setCompany(res.companyProfile);
-        if (!res.companyProfile.isCompleted) {
-          setActiveView("company-onboarding");
-        } else {
-          setActiveView("company-cockpit");
-        }
+        setActiveView(res.companyProfile.isCompleted ? "company-cockpit" : "company-onboarding");
       } else {
         setActiveView("company-cockpit");
       }
     } else if (resolvedRole === "candidate") {
+      setAuthStatus("AUTHENTICATED_CANDIDATE");
       if (res.candidateProfile) {
         setCandidate(res.candidateProfile);
         if (!res.candidateProfile.isCompleted) {
           setActiveView("candidate-onboarding");
+        } else if (!res.candidateProfile.commissionAgreementSigned) {
+          setActiveView("candidate-agreement");
         } else {
           setActiveView("candidate-radar");
         }
       } else {
-        setActiveView("candidate-radar");
+        setActiveView("candidate-onboarding");
       }
     } else if (resolvedRole === "admin") {
+      setAuthStatus("AUTHENTICATED_ADMIN");
       setActiveView("admin-overview");
+    } else {
+      setAuthStatus("ROLE_UNSET");
+      setActiveView("auth-select");
     }
 
     return { success: true, role: resolvedRole };
@@ -1817,13 +1963,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     await SupabaseService.signOut();
     setAuthUser(null);
     setRole(null);
+    setAuthStatus("UNAUTHENTICATED");
     setCandidate(emptyCandidateProfile);
     setCompany(emptyCompanyProfile);
+    setJobs([]);
+    setApplications([]);
+    setTalentBids([]);
+    setNotifications([]);
+    setSwipes([]);
     if (typeof window !== "undefined") {
       localStorage.removeItem("swipehired_candidate");
       localStorage.removeItem("swipehired_company");
       localStorage.removeItem("swipehired_role");
       localStorage.removeItem("swipehired_oauth_role");
+      localStorage.removeItem("swipehired_activeView");
+      localStorage.removeItem("swipehired_jobs");
+      localStorage.removeItem("swipehired_applications");
+      localStorage.removeItem("swipehired_talent_bids");
+      localStorage.removeItem("swipehired_notifications");
+      localStorage.removeItem("swipehired_swipes");
+      localStorage.removeItem("swipehired_new_job_draft");
+      sessionStorage.removeItem("swipehired_oauth_role");
+      document.cookie = "swipehired_oauth_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;";
     }
     setActiveView("landing");
   };
@@ -1839,6 +2000,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         isSupabaseConnected,
         isSupabaseSyncing,
         refreshFromSupabase,
+        authStatus,
+        isAuthLoading,
         authUser,
         authSignUp,
         authSignIn,
@@ -1858,6 +2021,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setCandidate,
         missingProfileFields,
         isCandidateProfileComplete,
+        signCommissionAgreement,
         company,
         updateCompany,
         setCompany,

@@ -33,3 +33,58 @@
   padding-top: env(safe-area-inset-top, 0.5rem);
 }
 
+/* ========================================================= */
+/* Print Stylesheet: Isolate and print only the Agreement PDF */
+/* ========================================================= */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm 15mm;
+  }
+
+  html, body {
+    background: #ffffff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Hide entire page structure */
+  body * {
+    visibility: hidden;
+  }
+
+  /* Completely remove layout chrome from flow */
+  header,
+  footer,
+  nav,
+  .no-print,
+  [data-no-print="true"] {
+    display: none !important;
+  }
+
+  /* Make only the agreement document visible */
+  #commission-agreement-pdf,
+  #commission-agreement-pdf * {
+    visibility: visible !important;
+  }
+
+  #commission-agreement-pdf {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    page-break-after: avoid;
+    break-inside: avoid;
+  }
+}
+

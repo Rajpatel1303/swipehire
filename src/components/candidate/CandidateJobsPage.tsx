@@ -33,7 +33,7 @@ export const CandidateJobsPage: React.FC = () => {
   const [viewLayout, setViewLayout] = useState<"grid" | "list">("grid");
   const [selectedJobModal, setSelectedJobModal] = useState<Job | null>(null);
 
-  // Compute multi-attribute match data for each active job
+  // Compute multi-attribute match data for each active job - strictly candidate matched roles
   const enrichedJobs = useMemo(() => {
     return jobs
       .filter((j) => j.status === "active")
@@ -49,12 +49,13 @@ export const CandidateJobsPage: React.FC = () => {
           aiSummary: matchData.aiSummary,
         };
       })
+      .filter((j) => j.isCandidateMatch)
       .sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
   }, [jobs, candidate]);
 
   // Counts
   const totalActive = enrichedJobs.length;
-  const totalMatched = enrichedJobs.filter((j) => j.isCandidateMatch).length;
+  const totalMatched = enrichedJobs.length;
   const skillsMatchedCount = enrichedJobs.filter((j) => j.matchCriteria?.skills).length;
   const locationMatchedCount = enrichedJobs.filter((j) => j.matchCriteria?.location).length;
   const roleMatchedCount = enrichedJobs.filter((j) => j.matchCriteria?.role).length;
@@ -62,10 +63,12 @@ export const CandidateJobsPage: React.FC = () => {
   // Filter jobs based on matching selection and user controls
   const filteredJobs = useMemo(() => {
     return enrichedJobs.filter((job) => {
-      // Matching criterion filter
-      if (matchFilterType === "matched_all" && !job.isCandidateMatch) {
+      // Strictly candidate matched roles only
+      if (!job.isCandidateMatch) {
         return false;
       }
+
+      // Matching criterion filter
       if (matchFilterType === "skills" && !job.matchCriteria?.skills) {
         return false;
       }

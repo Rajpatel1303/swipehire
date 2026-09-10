@@ -52,9 +52,12 @@ export const CompanyCockpitDashboard: React.FC = () => {
   const [activeScheduleCandidate, setActiveScheduleCandidate] = useState<Application | null>(null);
   const [selectedJobForModal, setSelectedJobForModal] = useState<Job | null>(null);
 
+  // Defense-in-depth: scope jobs and applications to current company
+  const companyJobs = jobs.filter((j) => !company.id || j.companyId === company.id);
+
   // Radar Interactive Selection state
   const [selectedRadarJobId, setSelectedRadarJobId] = useState<string>(
-    jobs[0]?.id || ""
+    companyJobs[0]?.id || ""
   );
   const [selectedRadarAppId, setSelectedRadarAppId] = useState<string>(
     applications[0]?.id || ""
@@ -62,18 +65,18 @@ export const CompanyCockpitDashboard: React.FC = () => {
 
   // Filter applications for company view (excluding rejected, hidden, or deleted)
   const companyApplications = applications.filter(
-    (a) => !a.hiddenFromCompany && !a.deletedByCompany && a.status !== "rejected"
+    (a) => (!company.id || a.companyId === company.id) && !a.hiddenFromCompany && !a.deletedByCompany && a.status !== "rejected"
   );
 
   // Cockpit metrics (Spec #19)
-  const activeJobs = jobs.filter((j) => j.status === "active");
+  const activeJobs = companyJobs.filter((j) => j.status === "active");
   const totalApplications = companyApplications.length;
   const interviewsScheduled = companyApplications.filter((a) => a.status === "interview").length;
   const strongCandidates = companyApplications.filter((a) => (a.matchScore || 0) >= 90).length;
 
   // Derive active radar job & candidate
   const currentRadarJob =
-    jobs.find((j) => j.id === selectedRadarJobId) || jobs[0] || null;
+    companyJobs.find((j) => j.id === selectedRadarJobId) || companyJobs[0] || null;
   const radarJobApplications = currentRadarJob
     ? companyApplications.filter((a) => a.jobId === currentRadarJob.id)
     : companyApplications;
@@ -242,7 +245,7 @@ export const CompanyCockpitDashboard: React.FC = () => {
 
           {/* Job Filter Pills */}
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-            {jobs.map((j) => {
+            {companyJobs.map((j) => {
               const isSelected = currentRadarJob?.id === j.id;
               const count = companyApplications.filter((a) => a.jobId === j.id).length;
               return (

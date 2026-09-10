@@ -20,7 +20,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { useApp } from "../../context/AppContext";
 
 export const LandingPage: React.FC = () => {
-  const { setActiveView, setRole, triggerCelebration } = useApp();
+  const { authUser, role, setActiveView, triggerCelebration } = useApp();
 
   // Interactive mini card state for the live preview on hero
   const [demoIndex, setDemoIndex] = useState(0);
@@ -114,7 +114,7 @@ export const LandingPage: React.FC = () => {
           </button>
           <button
             id="hero-login-btn"
-            onClick={() => setActiveView("candidate-login")}
+            onClick={() => setActiveView("auth-select")}
             className="px-8 py-4 bg-slate-900 hover:bg-slate-800 text-white rounded-full font-black text-xs sm:text-sm uppercase tracking-widest shadow-md transition-all cursor-pointer flex items-center gap-2 transform hover:-translate-y-0.5"
           >
             <span>Log In</span>
@@ -374,8 +374,13 @@ export const LandingPage: React.FC = () => {
 
             <button
               onClick={() => {
-                setRole("candidate");
-                setActiveView("candidate-radar");
+                if (authUser && role === "candidate") {
+                  setActiveView("candidate-radar");
+                } else if (authUser && role === "company") {
+                  setActiveView("company-cockpit");
+                } else {
+                  setActiveView("candidate-signup");
+                }
               }}
               className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-full text-xs font-black uppercase tracking-widest transition-all cursor-pointer"
             >
@@ -423,8 +428,13 @@ export const LandingPage: React.FC = () => {
 
             <button
               onClick={() => {
-                setRole("company");
-                setActiveView("company-cockpit");
+                if (authUser && role === "company") {
+                  setActiveView("company-cockpit");
+                } else if (authUser && role === "candidate") {
+                  setActiveView("candidate-radar");
+                } else {
+                  setActiveView("company-signup");
+                }
               }}
               className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-full text-xs font-black uppercase tracking-widest transition-all cursor-pointer"
             >
