@@ -133,7 +133,7 @@ export const CompanyAuth: React.FC<CompanyAuthProps> = ({ initialMode, isSignup 
       if (!res.success) {
         if (res.error?.toLowerCase().includes("rate limit")) {
           setError(
-            "Supabase email limit reached (default free mailer allows 3-4 emails/hr). Please wait a few minutes before trying again or configure custom SMTP in your Supabase dashboard."
+            "Verification email delivery limit reached. Please wait a few moments before requesting another link, or contact support."
           );
         } else {
           setError(res.error || "Failed to create company account. Please try again.");
@@ -151,7 +151,7 @@ export const CompanyAuth: React.FC<CompanyAuthProps> = ({ initialMode, isSignup 
     } catch (err: any) {
       if (err.message?.toLowerCase().includes("rate limit")) {
         setError(
-          "Supabase email limit reached (default free mailer allows 3-4 emails/hr). Please wait a few minutes before trying again or configure custom SMTP in your Supabase dashboard."
+          "Verification email delivery limit reached. Please wait a few moments before requesting another link, or contact support."
         );
       } else {
         setError(err.message || "An unexpected error occurred during company signup.");
@@ -188,7 +188,7 @@ export const CompanyAuth: React.FC<CompanyAuthProps> = ({ initialMode, isSignup 
           setError(res.error || "Invalid company login credentials. Please verify your email and password.");
         }
       } else {
-        setSuccessMsg("Authenticated successfully with Supabase! Opening Recruiter Cockpit...");
+        setSuccessMsg("Authenticated successfully! Opening Recruiter Cockpit...");
       }
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred during login.");
@@ -250,13 +250,13 @@ export const CompanyAuth: React.FC<CompanyAuthProps> = ({ initialMode, isSignup 
           </h2>
           <p className="text-xs text-slate-500 font-medium">
             {mode === "signup"
-              ? "Join modern teams finding 90%+ match talent with Supabase & AI"
-              : "Welcome back! Enter your verified recruiting credentials"}
+              ? "Join modern teams discovering top-tier talent with Intelligent Cloud Matching"
+              : "Welcome back! Enter your verified hiring credentials"}
           </p>
 
           <div className="inline-flex items-center gap-1 text-[10px] text-sky-700 bg-sky-50/80 px-2 py-0.5 rounded-md font-semibold">
             <ShieldCheck className="w-3 h-3 text-sky-600" />
-            <span>Supabase Auth Protected</span>
+            <span>Enterprise Cloud Auth Protected</span>
           </div>
         </div>
 
@@ -473,11 +473,11 @@ export const CompanyAuth: React.FC<CompanyAuthProps> = ({ initialMode, isSignup 
                 {isLoading ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Authenticating with Supabase...</span>
+                    <span>Securing Session...</span>
                   </>
                 ) : mode === "signup" ? (
                   <>
-                    <span>Create Company Account (Supabase)</span>
+                    <span>Create Company Account</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 ) : (

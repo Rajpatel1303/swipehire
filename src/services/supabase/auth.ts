@@ -1,6 +1,7 @@
 import { supabase } from "./client";
 import { CandidateProfile, CompanyProfile } from "../../types";
 import { AuditService } from "./audit";
+import { safeStorage } from "../../utils/safeStorage";
 
 export class AuthService {
   /**
@@ -173,11 +174,14 @@ export class AuthService {
       }
 
       // 3. sessionStorage
-      const sessionRole = sessionStorage.getItem("swipehired_oauth_role");
+      let sessionRole: string | null = null;
+      try {
+        sessionRole = sessionStorage.getItem("swipehired_oauth_role");
+      } catch {}
       if (sessionRole === "candidate" || sessionRole === "company") return sessionRole;
 
-      // 4. localStorage
-      const localRole = localStorage.getItem("swipehired_oauth_role");
+      // 4. safeStorage (localStorage with fallback)
+      const localRole = safeStorage.getItem("swipehired_oauth_role");
       if (localRole === "candidate" || localRole === "company") return localRole;
 
       // 5. Document cookie fallback
@@ -197,7 +201,7 @@ export class AuthService {
   static clearSavedOAuthRole(): void {
     if (typeof window === "undefined") return;
     try {
-      localStorage.removeItem("swipehired_oauth_role");
+      safeStorage.removeItem("swipehired_oauth_role");
       sessionStorage.removeItem("swipehired_oauth_role");
       document.cookie = "swipehired_oauth_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;";
     } catch {}
@@ -210,10 +214,12 @@ export class AuthService {
     role: "candidate" | "company"
   ): Promise<{ error: string | null }> {
     try {
+      safeStorage.setItem("swipehired_oauth_role", role);
       if (typeof window !== "undefined") {
-        localStorage.setItem("swipehired_oauth_role", role);
-        sessionStorage.setItem("swipehired_oauth_role", role);
-        document.cookie = `swipehired_oauth_role=${role}; path=/; max-age=600; SameSite=Lax`;
+        try {
+          sessionStorage.setItem("swipehired_oauth_role", role);
+          document.cookie = `swipehired_oauth_role=${role}; path=/; max-age=600; SameSite=Lax`;
+        } catch {}
       }
 
       const redirectTo =
@@ -452,6 +458,7 @@ export class AuthService {
           const cp = compData[0];
           companyProfile = {
             id: cp.id,
+            userId: cp.user_id || user.id,
             companyName: cp.company_name || "Company",
             contactPerson: cp.contact_person || user.user_metadata?.full_name || user.user_metadata?.name || "Recruiter",
             email: cp.email || user.email || "",
@@ -481,6 +488,7 @@ export class AuthService {
             "My Company";
           const newComp: CompanyProfile = {
             id: companyId,
+            userId: user.id,
             companyName,
             contactPerson: user.user_metadata?.contact_person || user.user_metadata?.full_name || user.user_metadata?.name || "Recruiter",
             email: user.email || "",

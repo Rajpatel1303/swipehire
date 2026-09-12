@@ -33,6 +33,15 @@
   padding-top: env(safe-area-inset-top, 0.5rem);
 }
 
+/* Prevent iOS WebKit auto-zoom on mobile form controls */
+@media screen and (max-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
 /* ========================================================= */
 /* Print Stylesheet: Isolate and print only the Agreement PDF */
 /* ========================================================= */

@@ -128,13 +128,13 @@ export const Navbar: React.FC = () => {
                   {role === "candidate" ? "Candidate" : role === "company" ? "Recruiter" : "Admin"}
                 </span>
               )}
-              {/* Supabase Live DB Badge */}
+              {/* Live Cloud Status Badge */}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   refreshFromSupabase();
                 }}
-                title="Supabase PostgreSQL Database Status (Click to sync)"
+                title="Live Cloud Sync Status (Click to sync)"
                 className={`hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold border transition-colors cursor-pointer ${
                   isSupabaseConnected
                     ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
@@ -143,7 +143,7 @@ export const Navbar: React.FC = () => {
               >
                 <span className={`w-1.5 h-1.5 rounded-full ${isSupabaseConnected ? "bg-emerald-500 animate-pulse" : "bg-amber-500"}`} />
                 <DatabaseIcon className="w-2.5 h-2.5" />
-                <span>{isSupabaseSyncing ? "Syncing..." : isSupabaseConnected ? "Supabase Live" : "Local Sync"}</span>
+                <span>{isSupabaseSyncing ? "Syncing..." : isSupabaseConnected ? "Cloud Sync Active" : "Local Sync"}</span>
                 {isSupabaseSyncing && <RefreshCw className="w-2.5 h-2.5 animate-spin" />}
               </button>
             </div>

@@ -151,51 +151,139 @@ export const CandidateProfilePage: React.FC = () => {
 
         {/* Experience Section */}
         <div className="space-y-3 pt-2">
-          <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-            <Briefcase className="w-4 h-4 text-emerald-600" />
-            <span>Work Experience</span>
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+              <Briefcase className="w-4 h-4 text-emerald-600" />
+              <span>Work Experience ({candidate.experience?.length || 0})</span>
+            </h3>
+            <button
+              onClick={() => setActiveView("candidate-review")}
+              className="text-xs font-bold text-emerald-700 hover:text-emerald-900 flex items-center gap-1 cursor-pointer"
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              <span>Edit</span>
+            </button>
+          </div>
           <div className="space-y-3">
-            {candidate.experience?.map((exp, i) => (
-              <div key={i} className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 text-xs">
-                <div className="flex items-center justify-between font-bold text-slate-900">
-                  <span className="text-sm">{exp.title}</span>
-                  <span className="text-slate-400 font-normal">{exp.duration}</span>
-                </div>
-                <div className="text-emerald-700 font-semibold mt-0.5">{exp.company}</div>
-                <p className="text-slate-600 mt-2 leading-relaxed">{exp.description}</p>
+            {(!candidate.experience || candidate.experience.length === 0) ? (
+              <div className="p-4 bg-slate-50 border border-dashed border-slate-200 rounded-2xl text-xs text-slate-500 text-center">
+                No work experience listed yet.{" "}
+                <button
+                  onClick={() => setActiveView("candidate-review")}
+                  className="font-bold text-emerald-700 hover:underline cursor-pointer"
+                >
+                  Click to add experience →
+                </button>
               </div>
-            ))}
+            ) : (
+              candidate.experience.map((exp, i) => (
+                <div key={i} className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 text-xs">
+                  <div className="flex items-center justify-between font-bold text-slate-900">
+                    <span className="text-sm">{exp.title}</span>
+                    <span className="text-slate-400 font-normal">{exp.duration}</span>
+                  </div>
+                  <div className="text-emerald-700 font-semibold mt-0.5">{exp.company}</div>
+                  {exp.description && (
+                    <p className="text-slate-600 mt-2 leading-relaxed">{exp.description}</p>
+                  )}
+                </div>
+              ))
+            )}
           </div>
         </div>
 
         {/* Education & Projects */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
           <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-3 text-xs">
-            <h3 className="font-bold text-slate-900 flex items-center gap-1.5">
-              <GraduationCap className="w-4 h-4 text-emerald-600" />
-              <span>Education</span>
-            </h3>
-            {candidate.education?.map((edu, i) => (
-              <div key={i} className="text-slate-600 space-y-0.5">
-                <strong className="text-slate-900 block">{edu.degree}</strong>
-                <p>{edu.institution}</p>
-                <span className="text-[11px] text-slate-400">Class of {edu.year}</span>
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-slate-900 flex items-center gap-1.5">
+                <GraduationCap className="w-4 h-4 text-emerald-600" />
+                <span>Education ({candidate.education?.length || 0})</span>
+              </h3>
+              <button
+                onClick={() => setActiveView("candidate-review")}
+                className="text-xs font-bold text-emerald-700 hover:text-emerald-900 flex items-center gap-1 cursor-pointer"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>Edit</span>
+              </button>
+            </div>
+            {(!candidate.education || candidate.education.length === 0) ? (
+              <div className="text-slate-500 py-3 text-center border border-dashed border-slate-200 rounded-xl">
+                No education added.{" "}
+                <button
+                  onClick={() => setActiveView("candidate-review")}
+                  className="font-bold text-emerald-700 hover:underline cursor-pointer"
+                >
+                  Add education →
+                </button>
               </div>
-            ))}
+            ) : (
+              candidate.education.map((edu, i) => (
+                <div key={i} className="text-slate-600 space-y-0.5 border-b border-slate-100 last:border-b-0 pb-2 last:pb-0">
+                  <strong className="text-slate-900 block">{edu.degree}</strong>
+                  <p>{edu.institution}</p>
+                  <span className="text-[11px] text-slate-400">Class of {edu.year}</span>
+                </div>
+              ))
+            )}
           </div>
 
           <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-3 text-xs">
-            <h3 className="font-bold text-slate-900 flex items-center gap-1.5">
-              <FolderGit2 className="w-4 h-4 text-sky-600" />
-              <span>Featured Projects</span>
-            </h3>
-            {candidate.projects?.map((proj, i) => (
-              <div key={i} className="text-slate-600 space-y-0.5">
-                <strong className="text-slate-900 block">{proj.name}</strong>
-                <p className="text-[11px] text-slate-500 leading-snug">{proj.description}</p>
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-slate-900 flex items-center gap-1.5">
+                <FolderGit2 className="w-4 h-4 text-sky-600" />
+                <span>Featured Projects ({candidate.projects?.length || 0})</span>
+              </h3>
+              <button
+                onClick={() => setActiveView("candidate-review")}
+                className="text-xs font-bold text-sky-700 hover:text-sky-900 flex items-center gap-1 cursor-pointer"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>Edit</span>
+              </button>
+            </div>
+            {(!candidate.projects || candidate.projects.length === 0) ? (
+              <div className="text-slate-500 py-3 text-center border border-dashed border-slate-200 rounded-xl">
+                No projects added.{" "}
+                <button
+                  onClick={() => setActiveView("candidate-review")}
+                  className="font-bold text-sky-700 hover:underline cursor-pointer"
+                >
+                  Add projects →
+                </button>
               </div>
-            ))}
+            ) : (
+              candidate.projects.map((proj, i) => (
+                <div key={i} className="text-slate-600 space-y-1 border-b border-slate-100 last:border-b-0 pb-2 last:pb-0">
+                  <div className="flex items-center justify-between">
+                    <strong className="text-slate-900 block">{proj.name}</strong>
+                    {proj.link && (
+                      <a
+                        href={proj.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sky-600 hover:text-sky-800 text-[11px] font-bold"
+                      >
+                        Link ↗
+                      </a>
+                    )}
+                  </div>
+                  {proj.description && (
+                    <p className="text-[11px] text-slate-500 leading-snug">{proj.description}</p>
+                  )}
+                  {proj.technologies && proj.technologies.length > 0 && (
+                    <div className="flex flex-wrap gap-1 pt-0.5">
+                      {proj.technologies.map((t, ti) => (
+                        <span key={ti} className="px-1.5 py-0.5 bg-slate-200/70 text-slate-700 rounded text-[9px] font-medium">
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
           </div>
         </div>
 

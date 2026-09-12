@@ -130,7 +130,7 @@ export const CandidateAuth: React.FC<CandidateAuthProps> = ({ initialMode, isSig
       if (!res.success) {
         if (res.error?.toLowerCase().includes("rate limit")) {
           setError(
-            "Supabase email limit reached (default free mailer allows 3-4 emails/hr). Please wait a few minutes before trying again or configure custom SMTP in your Supabase dashboard."
+            "Verification email delivery limit reached. Please wait a few moments before requesting another link, or contact support."
           );
         } else {
           setError(res.error || "Failed to create account. Please try again.");
@@ -148,7 +148,7 @@ export const CandidateAuth: React.FC<CandidateAuthProps> = ({ initialMode, isSig
     } catch (err: any) {
       if (err.message?.toLowerCase().includes("rate limit")) {
         setError(
-          "Supabase email limit reached (default free mailer allows 3-4 emails/hr). Please wait a few minutes before trying again or configure custom SMTP in your Supabase dashboard."
+          "Verification email delivery limit reached. Please wait a few moments before requesting another link, or contact support."
         );
       } else {
         setError(err.message || "An unexpected error occurred during signup.");
@@ -247,13 +247,13 @@ export const CandidateAuth: React.FC<CandidateAuthProps> = ({ initialMode, isSig
           </h2>
           <p className="text-xs text-slate-500 font-medium">
             {mode === "signup"
-              ? "Create your account secured with Supabase Auth"
-              : "Welcome back! Enter your verified Supabase credentials"}
+              ? "Create your encrypted candidate account to discover high-match roles"
+              : "Welcome back! Enter your verified secure credentials"}
           </p>
 
           <div className="inline-flex items-center gap-1 text-[10px] text-emerald-700 bg-emerald-50/80 px-2 py-0.5 rounded-md font-semibold">
             <ShieldCheck className="w-3 h-3 text-emerald-600" />
-            <span>Supabase Auth Protected</span>
+            <span>256-Bit Encrypted Cloud Auth</span>
           </div>
         </div>
 
@@ -452,16 +452,16 @@ export const CandidateAuth: React.FC<CandidateAuthProps> = ({ initialMode, isSig
                 {isLoading ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Authenticating with Supabase...</span>
+                    <span>Securing Session...</span>
                   </>
                 ) : mode === "signup" ? (
                   <>
-                    <span>Create Account (Supabase Auth)</span>
+                    <span>Create Secure Account</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 ) : (
                   <>
-                    <span>Login with Supabase</span>
+                    <span>Sign In Securely</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}

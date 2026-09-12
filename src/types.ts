@@ -319,6 +319,21 @@ export interface TalentBid {
     note: string;
     counteredAt: string;
   };
+  companyCounterDetails?: {
+    revisedSalary: string;
+    revisedWorkMode: WorkMode | string;
+    note: string;
+    repliedAt: string;
+  };
+  lastActionBy?: "candidate" | "company";
+  negotiationHistory?: {
+    sender: "candidate" | "company";
+    senderName: string;
+    salary: string;
+    workMode: string;
+    note: string;
+    timestamp: string;
+  }[];
 }
 
 export interface SwipeInteraction {
@@ -344,6 +359,7 @@ export interface NotificationItem {
 
 export interface EmailTemplate {
   id: string;
+  companyId?: string;
   title: string;
   category: "received" | "shortlisted" | "interview" | "rejection" | "custom";
   subject: string;

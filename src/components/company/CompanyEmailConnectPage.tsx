@@ -14,13 +14,26 @@ import {
   ShieldCheck,
   X,
   ArrowRight,
+  ArrowLeft,
   Info,
+  Loader2,
+  Trash2,
+  Sparkles,
+  Plus,
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import { DEFAULT_EMAIL_TEMPLATES } from "../../services/defaultTemplates";
 
 export const CompanyEmailConnectPage: React.FC = () => {
-  const { company, updateCompany, emailTemplates, updateEmailTemplate, triggerCelebration } = useApp();
+  const {
+    company,
+    updateCompany,
+    emailTemplates,
+    addEmailTemplate,
+    updateEmailTemplate,
+    deleteEmailTemplate,
+    triggerCelebration,
+  } = useApp();
 
   const currentIntegration = company.emailIntegration || {
     provider: "none" as const,
@@ -31,7 +44,7 @@ export const CompanyEmailConnectPage: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<"connect" | "templates">("connect");
 
-  // SMTP Configuration Form State
+  // SMTP Configuration State
   const [smtpHost, setSmtpHost] = useState(currentIntegration.smtpHost || "smtp.gmail.com");
   const [smtpPort, setSmtpPort] = useState(currentIntegration.smtpPort || 587);
   const [smtpSecure, setSmtpSecure] = useState(currentIntegration.smtpSecure || false);
@@ -41,54 +54,193 @@ export const CompanyEmailConnectPage: React.FC = () => {
   const [fromEmail, setFromEmail] = useState(currentIntegration.fromEmail || currentIntegration.smtpUser || currentIntegration.connectedEmail || company.email || "");
   const [showPassword, setShowPassword] = useState(false);
 
-  // Edit mode vs active view
-  const [isEditingSMTP, setIsEditingSMTP] = useState(!currentIntegration.isConnected || currentIntegration.provider !== "smtp");
+  // Multi-step Connect Custom Email Wizard Modal State
+  const [showConfigModal, setShowConfigModal] = useState(false);
+  const [modalStep, setModalStep] = useState<1 | 2>(1);
+  const [isSavingDirectly, setIsSavingDirectly] = useState(false);
+  const [directSaveError, setDirectSaveError] = useState("");
 
-  // Test Email Modal State
-  const [showTestModal, setShowTestModal] = useState(false);
+  // Test Email Checking State
   const [testRecipient, setTestRecipient] = useState(company.email || "");
   const [testStage, setTestStage] = useState<"idle" | "connecting" | "authenticating" | "sending" | "success" | "error">("idle");
   const [testErrorMessage, setTestErrorMessage] = useState("");
   const [testSuccessMessage, setTestSuccessMessage] = useState("");
 
   // Template editor states
-  const [selectedTemplateCategory, setSelectedTemplateCategory] = useState<
-    "interview" | "shortlisted" | "received" | "rejection"
-  >("interview");
-  const [savedSuccess, setSavedSuccess] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(() => {
+    return emailTemplates[0]?.id || DEFAULT_EMAIL_TEMPLATES[0].id;
+  });
 
   const activeTemplate =
-    emailTemplates.find((t) => t.category === selectedTemplateCategory) ||
-    DEFAULT_EMAIL_TEMPLATES.find((t) => t.category === selectedTemplateCategory) ||
+    emailTemplates.find((t) => t.id === selectedTemplateId) ||
+    emailTemplates[0] ||
     DEFAULT_EMAIL_TEMPLATES[0];
 
-  const [currentSubject, setCurrentSubject] = useState(activeTemplate.subject);
-  const [currentBody, setCurrentBody] = useState(activeTemplate.bodyTemplate);
+  const [currentTitle, setCurrentTitle] = useState(activeTemplate?.title || "");
+  const [currentCategory, setCurrentCategory] = useState<
+    "received" | "shortlisted" | "interview" | "rejection" | "custom"
+  >(activeTemplate?.category || "interview");
+  const [currentSubject, setCurrentSubject] = useState(activeTemplate?.subject || "");
+  const [currentBody, setCurrentBody] = useState(activeTemplate?.bodyTemplate || "");
 
-  const handleCategorySelect = (category: "interview" | "shortlisted" | "received" | "rejection") => {
-    setSelectedTemplateCategory(category);
-    const tmpl =
-      emailTemplates.find((t) => t.category === category) ||
-      DEFAULT_EMAIL_TEMPLATES.find((t) => t.category === category);
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+  const [templateSaveError, setTemplateSaveError] = useState("");
+  const [savedSuccess, setSavedSuccess] = useState(false);
+
+  // Add Template Modal State
+  const [showAddTemplateModal, setShowAddTemplateModal] = useState(false);
+  const [newTemplateTitle, setNewTemplateTitle] = useState("");
+  const [newTemplateCategory, setNewTemplateCategory] = useState<
+    "received" | "shortlisted" | "interview" | "rejection" | "custom"
+  >("custom");
+  const [newTemplateSubject, setNewTemplateSubject] = useState("");
+  const [newTemplateBody, setNewTemplateBody] = useState("");
+  const [isCreatingTemplate, setIsCreatingTemplate] = useState(false);
+  const [addTemplateError, setAddTemplateError] = useState("");
+
+  // Delete Template State
+  const [isDeletingTemplate, setIsDeletingTemplate] = useState(false);
+
+  // Synchronize inputs whenever selected template changes
+  React.useEffect(() => {
+    if (activeTemplate) {
+      setCurrentTitle(activeTemplate.title || "");
+      setCurrentCategory(activeTemplate.category || "custom");
+      setCurrentSubject(activeTemplate.subject || "");
+      setCurrentBody(activeTemplate.bodyTemplate || "");
+      setTemplateSaveError("");
+    }
+  }, [activeTemplate?.id]);
+
+  const handleSelectTemplate = (id: string) => {
+    setSelectedTemplateId(id);
+    const tmpl = emailTemplates.find((t) => t.id === id);
     if (tmpl) {
-      setCurrentSubject(tmpl.subject);
-      setCurrentBody(tmpl.bodyTemplate);
+      setCurrentTitle(tmpl.title || "");
+      setCurrentCategory(tmpl.category || "custom");
+      setCurrentSubject(tmpl.subject || "");
+      setCurrentBody(tmpl.bodyTemplate || "");
     }
   };
 
-  const handleResetToDefault = () => {
-    const defaultTmpl = DEFAULT_EMAIL_TEMPLATES.find((t) => t.category === selectedTemplateCategory);
+  const handleResetToDefault = async () => {
+    const defaultTmpl =
+      DEFAULT_EMAIL_TEMPLATES.find((t) => t.id === activeTemplate.id) ||
+      DEFAULT_EMAIL_TEMPLATES.find((t) => t.category === activeTemplate.category) ||
+      DEFAULT_EMAIL_TEMPLATES[0];
+
     if (defaultTmpl) {
+      setCurrentTitle(defaultTmpl.title);
+      setCurrentCategory(defaultTmpl.category);
       setCurrentSubject(defaultTmpl.subject);
       setCurrentBody(defaultTmpl.bodyTemplate);
-      if (activeTemplate) {
-        updateEmailTemplate(activeTemplate.id, {
+      try {
+        await updateEmailTemplate(activeTemplate.id, {
+          title: defaultTmpl.title,
+          category: defaultTmpl.category,
           subject: defaultTmpl.subject,
           bodyTemplate: defaultTmpl.bodyTemplate,
         });
+        setSavedSuccess(true);
+        setTimeout(() => setSavedSuccess(false), 2500);
+      } catch (err: any) {
+        setTemplateSaveError(err.message || "Failed to reset template.");
       }
+    }
+  };
+
+  const handleSaveTemplates = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTemplateSaveError("");
+    if (!currentTitle.trim()) {
+      setTemplateSaveError("Please enter a template title.");
+      return;
+    }
+    if (!currentSubject.trim()) {
+      setTemplateSaveError("Please enter an email subject line.");
+      return;
+    }
+
+    setIsSavingTemplate(true);
+    try {
+      await updateEmailTemplate(activeTemplate.id, {
+        title: currentTitle.trim(),
+        category: currentCategory,
+        subject: currentSubject.trim(),
+        bodyTemplate: currentBody,
+      });
       setSavedSuccess(true);
-      setTimeout(() => setSavedSuccess(false), 2000);
+      triggerCelebration();
+      setTimeout(() => setSavedSuccess(false), 2500);
+    } catch (err: any) {
+      console.error("[Save Template Error]:", err);
+      setTemplateSaveError(err.message || "Failed to save template changes to Supabase.");
+    } finally {
+      setIsSavingTemplate(false);
+    }
+  };
+
+  const handleDeleteTemplate = async () => {
+    if (
+      !window.confirm(
+        `Are you sure you want to delete "${activeTemplate.title}"? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+
+    setIsDeletingTemplate(true);
+    setTemplateSaveError("");
+    try {
+      await deleteEmailTemplate(activeTemplate.id);
+      const remaining = emailTemplates.filter((t) => t.id !== activeTemplate.id);
+      if (remaining.length > 0) {
+        setSelectedTemplateId(remaining[0].id);
+      } else {
+        setSelectedTemplateId(DEFAULT_EMAIL_TEMPLATES[0].id);
+      }
+    } catch (err: any) {
+      console.error("[Delete Template Error]:", err);
+      setTemplateSaveError(err.message || "Failed to delete template from database.");
+    } finally {
+      setIsDeletingTemplate(false);
+    }
+  };
+
+  const handleCreateNewTemplate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddTemplateError("");
+    if (!newTemplateTitle.trim()) {
+      setAddTemplateError("Please enter a template title.");
+      return;
+    }
+    if (!newTemplateSubject.trim()) {
+      setAddTemplateError("Please enter an email subject line.");
+      return;
+    }
+
+    setIsCreatingTemplate(true);
+    try {
+      const created = await addEmailTemplate({
+        title: newTemplateTitle.trim(),
+        category: newTemplateCategory,
+        subject: newTemplateSubject.trim(),
+        bodyTemplate:
+          newTemplateBody.trim() ||
+          `Hi {{candidate_name}},\n\nThank you for connecting with {{company_name}}!\n\nBest regards,\n{{company_name}} Recruiting Team`,
+      });
+
+      setSelectedTemplateId(created.id);
+      setShowAddTemplateModal(false);
+      setNewTemplateTitle("");
+      setNewTemplateSubject("");
+      setNewTemplateBody("");
+      triggerCelebration();
+    } catch (err: any) {
+      console.error("[Create Template Error]:", err);
+      setAddTemplateError(err.message || "Failed to create email template in database.");
+    } finally {
+      setIsCreatingTemplate(false);
     }
   };
 
@@ -121,25 +273,134 @@ export const CompanyEmailConnectPage: React.FC = () => {
     }
   };
 
-  const handleConnectGmail = () => {
-    updateCompany({
-      emailIntegration: {
-        provider: "gmail",
-        connectedEmail: company.email || "recruiter@gmail.com",
-        senderName: `${company.contactPerson || company.companyName} (${company.companyName})`,
-        isConnected: true,
-        connectedAt: new Date().toISOString(),
-      },
-    });
-    triggerCelebration();
-  };
-
-  const openTestModal = () => {
-    setTestRecipient(fromEmail || smtpUser || company.email || "");
+  const openConnectModal = (step: 1 | 2 = 1) => {
+    setModalStep(step);
     setTestStage("idle");
     setTestErrorMessage("");
     setTestSuccessMessage("");
-    setShowTestModal(true);
+    setDirectSaveError("");
+    if (!testRecipient) {
+      setTestRecipient(fromEmail || smtpUser || company.email || "");
+    }
+    setShowConfigModal(true);
+  };
+
+  const openUpdateEmailModal = () => {
+    setSmtpHost(currentIntegration.smtpHost || "smtp.gmail.com");
+    setSmtpPort(currentIntegration.smtpPort || 587);
+    setSmtpSecure(currentIntegration.smtpSecure || false);
+    setSmtpUser(currentIntegration.smtpUser || currentIntegration.connectedEmail || company.email || "");
+    setSmtpPassword(currentIntegration.smtpPassword || "");
+    setSenderName(currentIntegration.senderName || `${company.companyName || "Company"} Recruiting Team`);
+    setFromEmail(currentIntegration.fromEmail || currentIntegration.smtpUser || currentIntegration.connectedEmail || company.email || "");
+    setTestRecipient(currentIntegration.fromEmail || currentIntegration.smtpUser || company.email || "");
+    setModalStep(1);
+    setTestStage("idle");
+    setTestErrorMessage("");
+    setTestSuccessMessage("");
+    setDirectSaveError("");
+    setShowConfigModal(true);
+  };
+
+  const openNewConnectionModal = () => {
+    setSmtpHost("smtp.gmail.com");
+    setSmtpPort(587);
+    setSmtpSecure(false);
+    setSmtpUser("");
+    setSmtpPassword("");
+    setSenderName(`${company.companyName || "Company"} Recruiting Team`);
+    setFromEmail("");
+    setTestRecipient(company.email || "");
+    setModalStep(1);
+    setTestStage("idle");
+    setTestErrorMessage("");
+    setTestSuccessMessage("");
+    setDirectSaveError("");
+    setShowConfigModal(true);
+  };
+
+  const handleSaveAndConnectDirectly = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setDirectSaveError("");
+    if (!smtpHost.trim()) {
+      setDirectSaveError("Please enter an SMTP Host.");
+      return;
+    }
+    const resolvedEmail = (fromEmail || smtpUser || company.email || "").trim();
+    if (!resolvedEmail) {
+      setDirectSaveError("Please enter an Email Address or SMTP Username.");
+      return;
+    }
+
+    setIsSavingDirectly(true);
+    try {
+      // Must await Supabase persistence before reporting success or updating state
+      await updateCompany({
+        emailIntegration: {
+          provider: "smtp",
+          connectedEmail: resolvedEmail,
+          senderName: senderName || company.companyName || "Recruiting Team",
+          isConnected: true,
+          connectedAt: currentIntegration.connectedAt || new Date().toISOString(),
+          smtpHost: smtpHost.trim(),
+          smtpPort: Number(smtpPort) || 587,
+          smtpUser: smtpUser.trim() || resolvedEmail,
+          smtpPassword: smtpPassword.trim(),
+          smtpSecure,
+          fromEmail: resolvedEmail,
+          lastTestedAt: currentIntegration.lastTestedAt || new Date().toISOString(),
+        },
+      });
+
+      triggerCelebration();
+      setShowConfigModal(false);
+    } catch (err: any) {
+      console.error("[Email Connect Persistence Error]:", err);
+      setDirectSaveError(err.message || "Failed to save email integration to Supabase database.");
+    } finally {
+      setIsSavingDirectly(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    if (window.confirm("Are you sure you want to disconnect your custom email integration? Candidates will not receive automatic email notifications until reconnected.")) {
+      try {
+        await updateCompany({
+          emailIntegration: {
+            provider: "none",
+            connectedEmail: "",
+            senderName: "",
+            isConnected: false,
+          },
+        });
+      } catch (err: any) {
+        console.error("[Disconnect Persistence Error]:", err);
+        alert(`Failed to disconnect email integration: ${err.message}`);
+      }
+    }
+  };
+
+  const handleProceedToStep2 = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!smtpHost.trim()) {
+      alert("Please enter an SMTP Host.");
+      return;
+    }
+    if (!smtpUser.trim()) {
+      alert("Please enter your SMTP Username / Email.");
+      return;
+    }
+    if (!smtpPassword.trim()) {
+      alert("Please enter your SMTP Password or App Password.");
+      return;
+    }
+    setTestStage("idle");
+    setTestErrorMessage("");
+    setTestSuccessMessage("");
+    if (!testRecipient) {
+      setTestRecipient(fromEmail || smtpUser || company.email || "");
+    }
+    setModalStep(2);
   };
 
   const runSmtpTest = async (e: React.FormEvent) => {
@@ -181,29 +442,33 @@ export const CompanyEmailConnectPage: React.FC = () => {
         const data = await response.json();
 
         if (response.ok && data.success) {
-          setTestStage("success");
-          setTestSuccessMessage(data.message || `Test email successfully delivered to ${testRecipient}!`);
+          try {
+            // Save verified SMTP settings to company profile in Supabase
+            await updateCompany({
+              emailIntegration: {
+                provider: "smtp",
+                connectedEmail: fromEmail || smtpUser,
+                senderName: senderName || company.companyName,
+                isConnected: true,
+                connectedAt: new Date().toISOString(),
+                smtpHost,
+                smtpPort: Number(smtpPort),
+                smtpUser,
+                smtpPassword,
+                smtpSecure,
+                fromEmail: fromEmail || smtpUser,
+                lastTestedAt: new Date().toISOString(),
+              },
+            });
 
-          // Save verified SMTP settings to company profile
-          updateCompany({
-            emailIntegration: {
-              provider: "smtp",
-              connectedEmail: fromEmail || smtpUser,
-              senderName: senderName || company.companyName,
-              isConnected: true,
-              connectedAt: new Date().toISOString(),
-              smtpHost,
-              smtpPort: Number(smtpPort),
-              smtpUser,
-              smtpPassword,
-              smtpSecure,
-              fromEmail: fromEmail || smtpUser,
-              lastTestedAt: new Date().toISOString(),
-            },
-          });
-
-          setIsEditingSMTP(false);
-          triggerCelebration();
+            setTestStage("success");
+            setTestSuccessMessage(data.message || `Test email successfully delivered to ${testRecipient}!`);
+            triggerCelebration();
+          } catch (dbErr: any) {
+            console.error("[runSmtpTest] Failed to persist connection to database:", dbErr);
+            setTestStage("error");
+            setTestErrorMessage(`Test email delivered, but failed to save connection to Supabase database: ${dbErr.message}`);
+          }
         } else {
           setTestStage("error");
           setTestErrorMessage(
@@ -217,18 +482,6 @@ export const CompanyEmailConnectPage: React.FC = () => {
         );
       }
     }, 1200);
-  };
-
-  const handleSaveTemplates = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (activeTemplate) {
-      updateEmailTemplate(activeTemplate.id, {
-        subject: currentSubject,
-        bodyTemplate: currentBody,
-      });
-    }
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 2000);
   };
 
   return (
@@ -266,630 +519,1058 @@ export const CompanyEmailConnectPage: React.FC = () => {
       </div>
 
       {activeTab === "connect" ? (
-        <div className="space-y-8">
-          {/* Top Options Grid: Google Workspace & Custom SMTP */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Google Workspace / Gmail */}
-            <div
-              className={`p-6 bg-white rounded-[28px] border-2 transition-all space-y-4 ${
-                currentIntegration.isConnected && currentIntegration.provider === "gmail"
-                  ? "border-emerald-600 shadow-lg shadow-emerald-600/10"
-                  : "border-slate-900 shadow-md"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-red-500 text-white flex items-center justify-center font-black text-xl shadow-xs">
-                    G
+        <div className="space-y-6">
+          {currentIntegration.isConnected ? (
+            /* Connected State: Single unified card showing connection status */
+            <div className="bg-white rounded-[32px] border-2 border-emerald-600 shadow-xl p-6 sm:p-10 space-y-8">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-slate-100">
+                <div className="flex items-start gap-4">
+                  <div className="w-14 h-14 rounded-2xl bg-emerald-500 text-white flex items-center justify-center font-black shadow-md shadow-emerald-500/20 shrink-0">
+                    <CheckCircle2 className="w-8 h-8" />
                   </div>
                   <div>
-                    <h3 className="font-black text-sm text-slate-900 uppercase tracking-tight">Google Workspace / Gmail</h3>
-                    <p className="text-xs text-slate-500 font-medium">1-Click OAuth connection for Gmail</p>
-                  </div>
-                </div>
-                {currentIntegration.isConnected && currentIntegration.provider === "gmail" && (
-                  <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Active</span>
-                  </span>
-                )}
-              </div>
-
-              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-600 space-y-1">
-                <div className="flex items-center gap-1.5 text-slate-800 font-black uppercase tracking-wider text-[10px]">
-                  <Lock className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Google Workspace OAuth</span>
-                </div>
-                <p className="text-xs text-slate-600 font-medium">
-                  Account: <strong className="text-slate-900">{company.email || "recruiter@gmail.com"}</strong>
-                </p>
-              </div>
-
-              <button
-                onClick={handleConnectGmail}
-                className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-full text-xs font-black uppercase tracking-widest transition-colors cursor-pointer flex items-center justify-center gap-2"
-              >
-                <Mail className="w-4 h-4" />
-                <span>{currentIntegration.isConnected && currentIntegration.provider === "gmail" ? "Reconnect Gmail" : "Connect Google Workspace"}</span>
-              </button>
-            </div>
-
-            {/* Custom SMTP Server Quick Card */}
-            <div
-              className={`p-6 bg-white rounded-[28px] border-2 transition-all space-y-4 ${
-                currentIntegration.isConnected && currentIntegration.provider === "smtp"
-                  ? "border-sky-600 shadow-lg shadow-sky-600/10"
-                  : "border-slate-900 shadow-md"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-sky-600 text-white flex items-center justify-center font-black text-xl shadow-xs">
-                    <Server className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h3 className="font-black text-sm text-slate-900 uppercase tracking-tight">Custom SMTP Server</h3>
-                    <p className="text-xs text-slate-500 font-medium">Send from your branded company domain</p>
-                  </div>
-                </div>
-                {currentIntegration.isConnected && currentIntegration.provider === "smtp" && (
-                  <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-sky-50 text-sky-800 border border-sky-200 flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Verified</span>
-                  </span>
-                )}
-              </div>
-
-              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-600 space-y-1">
-                <div className="flex items-center gap-1.5 text-slate-800 font-black uppercase tracking-wider text-[10px]">
-                  <ShieldCheck className="w-3.5 h-3.5 text-sky-600" />
-                  <span>Custom Mail Server & Relay</span>
-                </div>
-                <p className="text-xs text-slate-600 font-medium">
-                  Active Host: <strong className="text-slate-900">{currentIntegration.smtpHost || "Not Configured"}</strong>
-                </p>
-              </div>
-
-              <button
-                onClick={() => setIsEditingSMTP(true)}
-                className="w-full py-3 bg-sky-600 hover:bg-sky-700 text-white rounded-full text-xs font-black uppercase tracking-widest transition-colors cursor-pointer flex items-center justify-center gap-2"
-              >
-                <Settings className="w-4 h-4" />
-                <span>{currentIntegration.isConnected && currentIntegration.provider === "smtp" ? "Update SMTP Settings" : "Configure Custom SMTP"}</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Active Connected SMTP Status or Configuration Form */}
-          {currentIntegration.isConnected && currentIntegration.provider === "smtp" && !isEditingSMTP ? (
-            /* Active Verified State */
-            <div className="bg-white rounded-[32px] border-2 border-emerald-600 shadow-xl p-6 sm:p-8 space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
-                <div className="flex items-center gap-3.5">
-                  <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-black">
-                    <CheckCircle2 className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-lg font-black text-slate-900 uppercase tracking-tight">SMTP Connection Verified & Live</h2>
-                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-500 text-white text-[9px] font-black uppercase tracking-wider">Active</span>
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <h2 className="text-xl sm:text-2xl font-black text-slate-900 uppercase tracking-tight">
+                        Your Email is Connected
+                      </h2>
+                      <span className="px-3 py-1 rounded-full bg-emerald-500 text-white text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-xs">
+                        <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                        Connected & Active
+                      </span>
                     </div>
-                    <p className="text-xs text-slate-500 font-medium">All candidate invitations and offer emails are dispatched via your custom mail server.</p>
+                    <div className="mt-2 flex items-center gap-2 flex-wrap">
+                      <span className="text-xs text-slate-500 font-medium">Connected Address:</span>
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 border border-slate-200 text-xs font-black text-slate-900 font-mono">
+                        <Mail className="w-3.5 h-3.5 text-emerald-600" />
+                        {currentIntegration.fromEmail || currentIntegration.connectedEmail || currentIntegration.smtpUser || "careers@company.com"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 font-medium mt-1 leading-relaxed">
+                      All candidate invitations, outreach messages, and job offer letters are dispatched directly from this verified email address.
+                    </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                {/* Connected Action Buttons: Update Email, New Connection, Check Connection, Disconnect */}
+                <div className="flex items-center gap-2.5 flex-wrap md:justify-end shrink-0">
                   <button
-                    onClick={() => {
-                      setTestStage("idle");
-                      setShowTestModal(true);
-                    }}
-                    className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-full text-xs font-black uppercase tracking-wider transition-colors cursor-pointer flex items-center gap-1.5"
-                  >
-                    <Send className="w-3.5 h-3.5 text-sky-600" />
-                    <span>Send Test Email</span>
-                  </button>
-                  <button
-                    onClick={() => setIsEditingSMTP(true)}
-                    className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-full text-xs font-black uppercase tracking-wider transition-colors cursor-pointer flex items-center gap-1.5"
+                    type="button"
+                    onClick={openUpdateEmailModal}
+                    className="px-5 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-full text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-2 shadow-md hover:shadow-lg"
                   >
                     <Settings className="w-3.5 h-3.5" />
-                    <span>Update Settings</span>
+                    <span>Update Email</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={openNewConnectionModal}
+                    className="px-5 py-3 bg-sky-50 hover:bg-sky-100 text-sky-900 border-2 border-sky-200 rounded-full text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-2"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-sky-600" />
+                    <span>New Connection</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => openConnectModal(2)}
+                    className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-full text-xs font-black uppercase tracking-wider transition-colors cursor-pointer flex items-center gap-1.5"
+                    title="Send a live test verification email"
+                  >
+                    <Send className="w-3.5 h-3.5 text-sky-600" />
+                    <span>Check Connection</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleDisconnect}
+                    className="p-3 text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 rounded-full transition-colors cursor-pointer"
+                    title="Disconnect Email"
+                  >
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               </div>
 
-              {/* Connection Details Cards */}
+              {/* Connection Details Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">SMTP Host</p>
-                  <p className="text-xs font-black text-slate-800 mt-1 truncate">{currentIntegration.smtpHost || "smtp.gmail.com"}</p>
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Connected Sender</p>
+                  <p className="text-xs font-black text-slate-900 truncate">
+                    {currentIntegration.fromEmail || currentIntegration.connectedEmail || currentIntegration.smtpUser || "Configured"}
+                  </p>
                 </div>
-                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">SMTP Host</p>
+                  <p className="text-xs font-black text-slate-900 truncate">
+                    {currentIntegration.smtpHost || "smtp.gmail.com"}
+                  </p>
+                </div>
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Port & Security</p>
-                  <p className="text-xs font-black text-slate-800 mt-1">
+                  <p className="text-xs font-black text-slate-900">
                     {currentIntegration.smtpPort || 587} {currentIntegration.smtpSecure ? "(SSL/TLS)" : "(STARTTLS)"}
                   </p>
                 </div>
-                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">From Address</p>
-                  <p className="text-xs font-black text-slate-800 mt-1 truncate">{currentIntegration.fromEmail || currentIntegration.connectedEmail}</p>
-                </div>
-                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Sender Identity</p>
-                  <p className="text-xs font-black text-slate-800 mt-1 truncate">{currentIntegration.senderName}</p>
+                  <p className="text-xs font-black text-slate-900 truncate">
+                    {currentIntegration.senderName || company.companyName}
+                  </p>
                 </div>
               </div>
             </div>
           ) : (
-            /* SMTP Settings Form (Editable) */
-            <div className="bg-white rounded-[32px] border-2 border-slate-900 shadow-2xl p-6 sm:p-8 space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
-                <div>
-                  <h2 className="text-lg font-black text-slate-900 uppercase tracking-tight">Configure Custom SMTP Credentials</h2>
-                  <p className="text-xs text-slate-500 font-medium mt-0.5">
-                    Enter your email provider's SMTP settings. You will be prompted to test the connection before activating.
-                  </p>
-                </div>
-
-                {/* Preset Pills */}
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 mr-1">Presets:</span>
-                  <button
-                    type="button"
-                    onClick={() => applyPreset("gmail")}
-                    className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-[10px] font-bold text-slate-700 transition-colors cursor-pointer"
-                  >
-                    Gmail
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => applyPreset("sendgrid")}
-                    className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-[10px] font-bold text-slate-700 transition-colors cursor-pointer"
-                  >
-                    SendGrid
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => applyPreset("mailgun")}
-                    className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-[10px] font-bold text-slate-700 transition-colors cursor-pointer"
-                  >
-                    Mailgun
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => applyPreset("ses")}
-                    className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-[10px] font-bold text-slate-700 transition-colors cursor-pointer"
-                  >
-                    Amazon SES
-                  </button>
-                </div>
-              </div>
-
-              {/* Informational Tip for Gmail App Passwords */}
-              <div className="p-4 bg-sky-50 rounded-2xl border border-sky-200 text-xs text-sky-900 flex items-start gap-3">
-                <Info className="w-5 h-5 text-sky-600 shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <p className="font-bold">Using Gmail / Google Workspace?</p>
-                  <p className="text-[11px] text-sky-800 leading-relaxed">
-                    Google requires an <strong>App Password</strong> rather than your normal password. Go to your <strong>Google Account &rarr; Security &rarr; 2-Step Verification &rarr; App Passwords</strong>, generate a 16-character key, and paste it below.
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div>
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1.5">
-                    SMTP Host / Server <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. smtp.gmail.com or mail.yourcompany.com"
-                    value={smtpHost}
-                    onChange={(e) => setSmtpHost(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-2xl text-xs text-slate-900 font-bold focus:border-slate-900 focus:outline-none"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1.5">
-                      SMTP Port <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      required
-                      placeholder="587"
-                      value={smtpPort}
-                      onChange={(e) => setSmtpPort(Number(e.target.value))}
-                      className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-2xl text-xs text-slate-900 font-bold focus:border-slate-900 focus:outline-none"
-                    />
+            /* Not Connected State: Single Box to Connect Custom Email */
+            <div className="bg-white rounded-[32px] border-2 border-slate-900 shadow-xl p-6 sm:p-10 space-y-8">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-slate-100">
+                <div className="flex items-start gap-4">
+                  <div className="w-14 h-14 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black shadow-md shrink-0">
+                    <Mail className="w-7 h-7 text-sky-400" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1.5">
-                      Encryption
-                    </label>
-                    <select
-                      value={smtpSecure ? "ssl" : "tls"}
-                      onChange={(e) => setSmtpSecure(e.target.value === "ssl")}
-                      className="w-full px-3 py-3 bg-slate-50 border-2 border-slate-200 rounded-2xl text-xs text-slate-900 font-bold focus:border-slate-900 focus:outline-none"
-                    >
-                      <option value="tls">STARTTLS (587)</option>
-                      <option value="ssl">SSL / TLS (465)</option>
-                    </select>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <h2 className="text-xl sm:text-2xl font-black text-slate-900 uppercase tracking-tight">
+                        Connect Custom Email
+                      </h2>
+                      <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-800 border border-amber-200">
+                        Not Connected
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 font-medium mt-1 max-w-2xl leading-relaxed">
+                      Send recruitment invites, automatic interview requests, and job offer letters directly from your own business email or custom SMTP server.
+                    </p>
                   </div>
                 </div>
-
-                <div>
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1.5">
-                    SMTP Username / Email <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. careers@company.com"
-                    value={smtpUser}
-                    onChange={(e) => handleUserChange(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-2xl text-xs text-slate-900 font-bold focus:border-slate-900 focus:outline-none"
-                  />
-                  <p className="text-[10px] text-slate-400 font-medium mt-1">Your login email address for the mail server.</p>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1.5">
-                    SMTP Password / App Password <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      required
-                      placeholder="••••••••••••••••"
-                      value={smtpPassword}
-                      onChange={(e) => setSmtpPassword(e.target.value)}
-                      className="w-full px-4 py-3 pr-11 bg-slate-50 border-2 border-slate-200 rounded-2xl text-xs text-slate-900 font-bold focus:border-slate-900 focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                  <p className="text-[10px] text-slate-400 font-medium mt-1">16-character Google App Password (or SMTP server password).</p>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1.5">
-                    Sender Name (Branding)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Acme Talent Team"
-                    value={senderName}
-                    onChange={(e) => setSenderName(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-2xl text-xs text-slate-900 font-bold focus:border-slate-900 focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1.5">
-                    From Email Address
-                  </label>
-                  <input
-                    type="email"
-                    placeholder="e.g. careers@company.com"
-                    value={fromEmail}
-                    onChange={(e) => setFromEmail(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-2xl text-xs text-slate-900 font-bold focus:border-slate-900 focus:outline-none"
-                  />
-                  <p className="text-[10px] text-slate-400 font-medium mt-1">For Gmail, this must match your SMTP Username.</p>
-                </div>
-              </div>
-
-              <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
-                {currentIntegration.isConnected && currentIntegration.provider === "smtp" ? (
-                  <button
-                    type="button"
-                    onClick={() => setIsEditingSMTP(false)}
-                    className="text-xs font-black uppercase tracking-wider text-slate-500 hover:text-slate-900 cursor-pointer"
-                  >
-                    Cancel Editing
-                  </button>
-                ) : <div />}
 
                 <button
                   type="button"
-                  onClick={openTestModal}
-                  className="w-full sm:w-auto px-8 py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-full font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg cursor-pointer"
+                  onClick={() => openConnectModal(1)}
+                  className="w-full md:w-auto px-8 py-4 bg-slate-900 hover:bg-slate-800 text-white rounded-full font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2.5 shadow-xl hover:shadow-2xl transition-all cursor-pointer shrink-0"
                 >
-                  <span>Test Connection & Save</span>
+                  <Mail className="w-4 h-4 text-sky-400" />
+                  <span>Connect Custom Email</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
+              </div>
+
+              {/* Feature Highlights Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                  <div className="w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-sky-600 shadow-xs">
+                    <Server className="w-4 h-4" />
+                  </div>
+                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-tight">Any SMTP Provider</h3>
+                  <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                    Connect Google Workspace, Gmail, SendGrid, Mailgun, Amazon SES, or any private mail server.
+                  </p>
+                </div>
+
+                <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                  <div className="w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-emerald-600 shadow-xs">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-tight">Automated Outreach</h3>
+                  <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                    Automatically deliver customized invitation emails to candidates with your company branding and details.
+                  </p>
+                </div>
+
+                <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                  <div className="w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-indigo-600 shadow-xs">
+                    <ShieldCheck className="w-4 h-4" />
+                  </div>
+                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-tight">Real-Time Verification</h3>
+                  <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                    Verify server credentials and test deliverability with live progress feedback before activating.
+                  </p>
+                </div>
               </div>
             </div>
           )}
         </div>
       ) : (
-        /* Template Customizer */
-        <form onSubmit={handleSaveTemplates} className="bg-white rounded-[32px] border-2 border-slate-900 shadow-2xl p-6 sm:p-8 space-y-6">
-          <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-            <div>
-              <h2 className="text-lg font-black text-slate-900 uppercase tracking-tight">Automated Template Editor</h2>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">
-                Variables: <code className="bg-slate-100 px-1 py-0.5 rounded text-emerald-700 font-mono font-bold">&#123;&#123;candidate_name&#125;&#125;</code>, <code className="bg-slate-100 px-1 py-0.5 rounded text-emerald-700 font-mono font-bold">&#123;&#123;job_title&#125;&#125;</code>, <code className="bg-slate-100 px-1 py-0.5 rounded text-emerald-700 font-mono font-bold">&#123;&#123;company_name&#125;&#125;</code>
-              </p>
+        /* Dynamic Template Customizer & Manager */
+        <div className="space-y-6">
+          <form onSubmit={handleSaveTemplates} className="bg-white rounded-[32px] border-2 border-slate-900 shadow-2xl p-6 sm:p-8 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+              <div>
+                <h2 className="text-lg font-black text-slate-900 uppercase tracking-tight">Automated Template Editor</h2>
+                <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                  <span className="text-xs text-slate-500 font-medium">Click variable to insert:</span>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentBody((prev) => `${prev} {{candidate_name}}`)}
+                    className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-mono text-[11px] font-bold hover:bg-emerald-100 border border-emerald-200 transition-colors cursor-pointer"
+                    title="Click to insert {{candidate_name}}"
+                  >
+                    + &#123;&#123;candidate_name&#125;&#125;
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentBody((prev) => `${prev} {{job_title}}`)}
+                    className="px-2 py-0.5 rounded bg-sky-50 text-sky-700 font-mono text-[11px] font-bold hover:bg-sky-100 border border-sky-200 transition-colors cursor-pointer"
+                    title="Click to insert {{job_title}}"
+                  >
+                    + &#123;&#123;job_title&#125;&#125;
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentBody((prev) => `${prev} {{company_name}}`)}
+                    className="px-2 py-0.5 rounded bg-amber-50 text-amber-700 font-mono text-[11px] font-bold hover:bg-amber-100 border border-amber-200 transition-colors cursor-pointer"
+                    title="Click to insert {{company_name}}"
+                  >
+                    + &#123;&#123;company_name&#125;&#125;
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5 shrink-0">
+                {savedSuccess && (
+                  <span className="px-3.5 py-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Saved to Database</span>
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewTemplateTitle("");
+                    setNewTemplateCategory("custom");
+                    setNewTemplateSubject("");
+                    setNewTemplateBody("");
+                    setAddTemplateError("");
+                    setShowAddTemplateModal(true);
+                  }}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>New Template</span>
+                </button>
+              </div>
             </div>
 
-            {savedSuccess && (
-              <span className="px-3.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Templates Saved</span>
-              </span>
+            {/* Dynamic Template Tabs */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+              {emailTemplates.map((tmpl, idx) => {
+                const isSelected = tmpl.id === activeTemplate.id;
+                return (
+                  <button
+                    key={tmpl.id}
+                    type="button"
+                    onClick={() => handleSelectTemplate(tmpl.id)}
+                    className={`px-4 py-2.5 rounded-2xl text-[11px] font-black uppercase tracking-wider whitespace-nowrap transition-all cursor-pointer flex items-center gap-2 shrink-0 ${
+                      isSelected
+                        ? "bg-slate-900 text-white shadow-md shadow-slate-900/10"
+                        : "bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200"
+                    }`}
+                  >
+                    <span
+                      className={`w-5 h-5 rounded-full text-[10px] font-black flex items-center justify-center ${
+                        isSelected ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"
+                      }`}
+                    >
+                      {idx + 1}
+                    </span>
+                    <span>{tmpl.title}</span>
+                    <span
+                      className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-widest ${
+                        isSelected ? "bg-white/20 text-white" : "bg-slate-200/80 text-slate-500"
+                      }`}
+                    >
+                      {tmpl.category}
+                    </span>
+                  </button>
+                );
+              })}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setNewTemplateTitle("");
+                  setNewTemplateCategory("custom");
+                  setNewTemplateSubject("");
+                  setNewTemplateBody("");
+                  setAddTemplateError("");
+                  setShowAddTemplateModal(true);
+                }}
+                className="px-3 py-2.5 rounded-2xl border-2 border-dashed border-slate-300 hover:border-slate-900 text-slate-500 hover:text-slate-900 text-[11px] font-black uppercase tracking-wider whitespace-nowrap flex items-center gap-1.5 cursor-pointer transition-colors shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Template</span>
+              </button>
+            </div>
+
+            {templateSaveError && (
+              <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                <span>{templateSaveError}</span>
+              </div>
             )}
-          </div>
 
-          {/* Template Tabs */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <button
-              type="button"
-              onClick={() => handleCategorySelect("interview")}
-              className={`p-3 rounded-2xl text-[10px] font-black uppercase tracking-wider text-left transition-colors cursor-pointer ${
-                selectedTemplateCategory === "interview"
-                  ? "bg-slate-900 text-white shadow-xs"
-                  : "bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200"
-              }`}
-            >
-              1. Interview Invite
-            </button>
+            {/* Template Form Inputs */}
+            <div className="space-y-4 pt-1">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1.5">
+                    Template Name / Title <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={currentTitle}
+                    onChange={(e) => setCurrentTitle(e.target.value)}
+                    placeholder="e.g. Technical Interview Invite"
+                    className="w-full px-4 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-2xl text-xs text-slate-900 font-bold focus:border-slate-900 focus:outline-none"
+                  />
+                </div>
 
-            <button
-              type="button"
-              onClick={() => handleCategorySelect("shortlisted")}
-              className={`p-3 rounded-2xl text-[10px] font-black uppercase tracking-wider text-left transition-colors cursor-pointer ${
-                selectedTemplateCategory === "shortlisted"
-                  ? "bg-slate-900 text-white shadow-xs"
-                  : "bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200"
-              }`}
-            >
-              2. Shortlisted
-            </button>
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1.5">
+                    Category
+                  </label>
+                  <select
+                    value={currentCategory}
+                    onChange={(e) => setCurrentCategory(e.target.value as any)}
+                    className="w-full px-3 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-2xl text-xs text-slate-900 font-bold focus:border-slate-900 focus:outline-none cursor-pointer"
+                  >
+                    <option value="interview">Interview Invite</option>
+                    <option value="shortlisted">Shortlisted</option>
+                    <option value="received">App Received</option>
+                    <option value="rejection">Rejection</option>
+                    <option value="custom">Custom Outreach</option>
+                  </select>
+                </div>
+              </div>
 
-            <button
-              type="button"
-              onClick={() => handleCategorySelect("received")}
-              className={`p-3 rounded-2xl text-[10px] font-black uppercase tracking-wider text-left transition-colors cursor-pointer ${
-                selectedTemplateCategory === "received"
-                  ? "bg-slate-900 text-white shadow-xs"
-                  : "bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200"
-              }`}
-            >
-              3. App Received
-            </button>
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1.5">
+                  Email Subject Line <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={currentSubject}
+                  onChange={(e) => setCurrentSubject(e.target.value)}
+                  placeholder="e.g. Interview Invitation: {{job_title}} at {{company_name}}"
+                  className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-2xl text-xs text-slate-900 font-bold focus:border-slate-900 focus:outline-none"
+                />
+              </div>
 
-            <button
-              type="button"
-              onClick={() => handleCategorySelect("rejection")}
-              className={`p-3 rounded-2xl text-[10px] font-black uppercase tracking-wider text-left transition-colors cursor-pointer ${
-                selectedTemplateCategory === "rejection"
-                  ? "bg-slate-900 text-white shadow-xs"
-                  : "bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200"
-              }`}
-            >
-              4. Rejection
-            </button>
-          </div>
-
-          <div className="space-y-4 pt-2">
-            <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1.5">Email Subject</label>
-              <input
-                type="text"
-                value={currentSubject}
-                onChange={(e) => setCurrentSubject(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-2xl text-xs text-slate-900 font-bold focus:border-slate-900 focus:outline-none"
-              />
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-700">
+                    Message Template Body
+                  </label>
+                  <div className="flex items-center gap-1 text-[10px] text-slate-500">
+                    <span>Insert:</span>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentBody((prev) => `${prev} {{candidate_name}}`)}
+                      className="text-emerald-700 hover:underline font-bold cursor-pointer"
+                    >
+                      Name
+                    </button>
+                    <span>·</span>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentBody((prev) => `${prev} {{job_title}}`)}
+                      className="text-sky-700 hover:underline font-bold cursor-pointer"
+                    >
+                      Role
+                    </button>
+                    <span>·</span>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentBody((prev) => `${prev} {{company_name}}`)}
+                      className="text-amber-700 hover:underline font-bold cursor-pointer"
+                    >
+                      Company
+                    </button>
+                  </div>
+                </div>
+                <textarea
+                  rows={8}
+                  required
+                  value={currentBody}
+                  onChange={(e) => setCurrentBody(e.target.value)}
+                  className="w-full p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl text-xs text-slate-900 leading-relaxed font-mono focus:border-slate-900 focus:outline-none"
+                />
+              </div>
             </div>
 
-            <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1.5">Message Template Body</label>
-              <textarea
-                rows={7}
-                value={currentBody}
-                onChange={(e) => setCurrentBody(e.target.value)}
-                className="w-full p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl text-xs text-slate-900 leading-relaxed font-medium focus:border-slate-900 focus:outline-none"
-              />
+            {/* Template Actions Footer */}
+            <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={handleResetToDefault}
+                  className="text-xs font-black uppercase tracking-wider text-slate-500 hover:text-slate-900 cursor-pointer flex items-center gap-1.5 transition-colors"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Reset to Prebuilt</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isDeletingTemplate || emailTemplates.length <= 1}
+                  onClick={handleDeleteTemplate}
+                  className="text-xs font-black uppercase tracking-wider text-rose-500 hover:text-rose-700 disabled:opacity-30 cursor-pointer flex items-center gap-1.5 transition-colors"
+                  title="Permanently delete this template"
+                >
+                  {isDeletingTemplate ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-3.5 h-3.5" />
+                  )}
+                  <span>Delete Template</span>
+                </button>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSavingTemplate}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-sky-600 hover:bg-sky-700 disabled:opacity-60 text-white rounded-full font-black text-xs uppercase tracking-widest shadow-md shadow-sky-600/25 cursor-pointer transition-all"
+              >
+                {isSavingTemplate ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Saving to Database...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    <span>Save Template Changes</span>
+                  </>
+                )}
+              </button>
             </div>
-          </div>
+          </form>
 
-          <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <button
-              type="button"
-              onClick={handleResetToDefault}
-              className="text-xs font-black uppercase tracking-wider text-slate-500 hover:text-slate-900 cursor-pointer flex items-center gap-1.5"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Reset to Prebuilt Template</span>
-            </button>
+          {/* Create New Template Modal */}
+          {showAddTemplateModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+              <div className="bg-white w-full max-w-xl rounded-[32px] shadow-2xl border-2 border-slate-900 overflow-hidden animate-in zoom-in-95 duration-150 flex flex-col max-h-[92vh]">
+                <div className="p-6 border-b-2 border-slate-100 flex items-center justify-between bg-slate-50/75 shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-black shadow-xs">
+                      <Plus className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-black text-slate-900 uppercase tracking-tight">
+                        Create New Email Template
+                      </h2>
+                      <p className="text-xs text-slate-500 font-medium">
+                        Configure customized outreach copy saved directly to your workspace.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddTemplateModal(false)}
+                    className="p-2 rounded-full text-slate-400 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
 
-            <button
-              type="submit"
-              className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-sky-600 hover:bg-sky-700 text-white rounded-full font-black text-xs uppercase tracking-widest shadow-md shadow-sky-600/25 cursor-pointer"
-            >
-              <Save className="w-4 h-4" />
-              <span>Save Template Changes</span>
-            </button>
-          </div>
-        </form>
+                <form onSubmit={handleCreateNewTemplate} className="p-6 space-y-4 overflow-y-auto">
+                  {addTemplateError && (
+                    <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                      <span>{addTemplateError}</span>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="sm:col-span-2">
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1">
+                        Template Name / Title <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Round 2 Architecture Interview"
+                        value={newTemplateTitle}
+                        onChange={(e) => setNewTemplateTitle(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs text-slate-900 font-bold focus:border-slate-900 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1">
+                        Category
+                      </label>
+                      <select
+                        value={newTemplateCategory}
+                        onChange={(e) => setNewTemplateCategory(e.target.value as any)}
+                        className="w-full px-3 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs text-slate-900 font-bold focus:border-slate-900 focus:outline-none cursor-pointer"
+                      >
+                        <option value="interview">Interview Invite</option>
+                        <option value="shortlisted">Shortlisted</option>
+                        <option value="received">App Received</option>
+                        <option value="rejection">Rejection</option>
+                        <option value="custom">Custom Outreach</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1">
+                      Email Subject <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Interview Invitation: {{job_title}} at {{company_name}}"
+                      value={newTemplateSubject}
+                      onChange={(e) => setNewTemplateSubject(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs text-slate-900 font-bold focus:border-slate-900 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-700">
+                        Template Body
+                      </label>
+                      <div className="flex items-center gap-1 text-[10px] text-slate-500">
+                        <span>Insert:</span>
+                        <button
+                          type="button"
+                          onClick={() => setNewTemplateBody((prev) => `${prev} {{candidate_name}}`)}
+                          className="text-emerald-700 hover:underline font-bold cursor-pointer"
+                        >
+                          Name
+                        </button>
+                        <span>·</span>
+                        <button
+                          type="button"
+                          onClick={() => setNewTemplateBody((prev) => `${prev} {{job_title}}`)}
+                          className="text-sky-700 hover:underline font-bold cursor-pointer"
+                        >
+                          Role
+                        </button>
+                        <span>·</span>
+                        <button
+                          type="button"
+                          onClick={() => setNewTemplateBody((prev) => `${prev} {{company_name}}`)}
+                          className="text-amber-700 hover:underline font-bold cursor-pointer"
+                        >
+                          Company
+                        </button>
+                      </div>
+                    </div>
+                    <textarea
+                      rows={6}
+                      placeholder={`Hi {{candidate_name}},\n\nWe would love to invite you to discuss the {{job_title}} opportunity at {{company_name}}.\n\nWarm regards,\n{{company_name}} Team`}
+                      value={newTemplateBody}
+                      onChange={(e) => setNewTemplateBody(e.target.value)}
+                      className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs text-slate-900 font-mono leading-relaxed focus:border-slate-900 focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+                    <button
+                      type="button"
+                      disabled={isCreatingTemplate}
+                      onClick={() => setShowAddTemplateModal(false)}
+                      className="px-4 py-2.5 text-xs font-black uppercase tracking-wider text-slate-500 hover:text-slate-900 cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isCreatingTemplate}
+                      className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-full font-black text-xs uppercase tracking-widest shadow-md shadow-emerald-600/20 cursor-pointer flex items-center gap-1.5 transition-colors"
+                    >
+                      {isCreatingTemplate ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Creating...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>Create & Save Template</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
-      {/* Test Email Modal */}
-      {showTestModal && (
+      {/* Connect Custom Email Multi-Step Modal */}
+      {showConfigModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white w-full max-w-lg rounded-[32px] shadow-2xl border-2 border-slate-900 overflow-hidden animate-in zoom-in-95 duration-150">
-            <div className="p-6 border-b-2 border-slate-100 flex items-center justify-between bg-slate-50/50">
+          <div className="bg-white w-full max-w-xl rounded-[32px] shadow-2xl border-2 border-slate-900 overflow-hidden animate-in zoom-in-95 duration-150 flex flex-col max-h-[92vh]">
+            
+            {/* Modal Header */}
+            <div className="p-6 border-b-2 border-slate-100 flex items-center justify-between bg-slate-50/75 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-sky-600 text-white flex items-center justify-center font-black shadow-xs">
-                  <Send className="w-5 h-5" />
+                <div className="w-11 h-11 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black shadow-xs">
+                  <Mail className="w-5 h-5 text-sky-400" />
                 </div>
                 <div>
-                  <h2 className="text-base font-black text-slate-900 uppercase tracking-tight">Test SMTP Connection</h2>
-                  <p className="text-xs text-slate-500 font-medium">Verify credentials by sending a live test email</p>
+                  <h2 className="text-base font-black text-slate-900 uppercase tracking-tight">
+                    {modalStep === 1
+                      ? currentIntegration.isConnected
+                        ? "Update Custom Email"
+                        : "Connect Custom Email"
+                      : "Verify Email Connection"}
+                  </h2>
+                  <p className="text-xs text-slate-500 font-medium">
+                    {modalStep === 1 ? "Step 1 of 2: SMTP & Sender Configuration" : "Step 2 of 2: Connection Test & Verification"}
+                  </p>
                 </div>
               </div>
               <button
-                onClick={() => setShowTestModal(false)}
+                type="button"
+                onClick={() => setShowConfigModal(false)}
                 className="p-2 rounded-full text-slate-400 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="p-6 space-y-5">
-              {testStage === "success" ? (
-                /* Success View */
-                <div className="text-center py-4 space-y-4">
-                  <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto shadow-inner">
-                    <CheckCircle2 className="w-8 h-8" />
+            {/* Stepper Progress Bar */}
+            <div className="px-6 py-3 bg-slate-100/60 border-b border-slate-100 flex items-center justify-between gap-2 shrink-0">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black ${
+                    modalStep === 1 ? "bg-slate-900 text-white" : "bg-emerald-600 text-white"
+                  }`}
+                >
+                  {modalStep === 2 ? <CheckCircle2 className="w-4 h-4" /> : "1"}
+                </span>
+                <span className={`text-xs font-bold ${modalStep === 1 ? "text-slate-900" : "text-slate-500"}`}>
+                  Credentials
+                </span>
+              </div>
+              <div className="flex-1 h-0.5 bg-slate-200 mx-2" />
+              <div className="flex items-center gap-2">
+                <span
+                  className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black ${
+                    modalStep === 2 ? "bg-sky-600 text-white" : "bg-slate-200 text-slate-600"
+                  }`}
+                >
+                  2
+                </span>
+                <span className={`text-xs font-bold ${modalStep === 2 ? "text-slate-900" : "text-slate-400"}`}>
+                  Check Connection
+                </span>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-5">
+              {modalStep === 1 ? (
+                /* STEP 1: Enter Email & SMTP Credentials */
+                <form onSubmit={handleProceedToStep2} className="space-y-4">
+                  {/* Presets */}
+                  <div className="flex items-center justify-between flex-wrap gap-2 pb-1">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Quick Presets:</span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => applyPreset("gmail")}
+                        className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-[10px] font-bold text-slate-700 transition-colors cursor-pointer"
+                      >
+                        Gmail
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyPreset("sendgrid")}
+                        className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-[10px] font-bold text-slate-700 transition-colors cursor-pointer"
+                      >
+                        SendGrid
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyPreset("mailgun")}
+                        className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-[10px] font-bold text-slate-700 transition-colors cursor-pointer"
+                      >
+                        Mailgun
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyPreset("ses")}
+                        className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-[10px] font-bold text-slate-700 transition-colors cursor-pointer"
+                      >
+                        Amazon SES
+                      </button>
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <h3 className="text-base font-black text-slate-900 uppercase tracking-tight">Test Email Sent Successfully!</h3>
-                    <p className="text-xs text-slate-600 leading-relaxed font-medium">
-                      {testSuccessMessage}
+
+                  {/* Gmail Help Tip */}
+                  <div className="p-3 bg-sky-50 rounded-2xl border border-sky-200 text-xs text-sky-900 flex items-start gap-2.5">
+                    <Info className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-sky-800 leading-relaxed font-medium">
+                      <strong>Google Workspace or Gmail users:</strong> Use a 16-character Google App Password (found in Google Account &rarr; Security &rarr; App Passwords) for your SMTP Password.
                     </p>
                   </div>
 
-                  <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 text-xs text-emerald-900 text-left space-y-1">
-                    <p className="font-bold">✓ Real Email Dispatched</p>
-                    <p className="text-[11px] text-emerald-800">
-                      The test message was successfully accepted and transmitted by <strong>{smtpHost}</strong> to <strong>{testRecipient}</strong>. Please check your inbox (and spam folder).
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={() => setShowTestModal(false)}
-                    className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-full font-black text-xs uppercase tracking-widest shadow-md transition-colors cursor-pointer"
-                  >
-                    Done & Close
-                  </button>
-                </div>
-              ) : (
-                /* Test Execution Form */
-                <form onSubmit={runSmtpTest} className="space-y-4">
-                  {/* Connection Summary Details */}
-                  <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-1.5">
-                    <div className="flex items-center justify-between text-slate-700 font-bold">
-                      <span>Server:</span>
-                      <span className="font-mono text-slate-900">{smtpHost}:{smtpPort}</span>
+                  {/* Sender Profile */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1">
+                        Sender Name (Branding)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Acme Hiring Team"
+                        value={senderName}
+                        onChange={(e) => setSenderName(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs text-slate-900 font-bold focus:border-slate-900 focus:outline-none"
+                      />
                     </div>
-                    <div className="flex items-center justify-between text-slate-700 font-bold">
-                      <span>Login User:</span>
-                      <span className="font-mono text-slate-900 truncate max-w-[240px]">{smtpUser}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-slate-700 font-bold">
-                      <span>Sender Identity:</span>
-                      <span className="font-mono text-slate-900 truncate max-w-[240px]">{fromEmail || smtpUser}</span>
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1">
+                        From Email Address
+                      </label>
+                      <input
+                        type="email"
+                        placeholder="e.g. careers@company.com"
+                        value={fromEmail}
+                        onChange={(e) => setFromEmail(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs text-slate-900 font-bold focus:border-slate-900 focus:outline-none"
+                      />
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1.5">
-                      Send Test Email To:
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      placeholder="e.g. your-personal-email@gmail.com"
-                      value={testRecipient}
-                      onChange={(e) => setTestRecipient(e.target.value)}
-                      disabled={testStage === "connecting" || testStage === "authenticating" || testStage === "sending"}
-                      className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-2xl text-xs text-slate-900 font-bold focus:border-slate-900 focus:outline-none"
-                    />
-                    <p className="text-[11px] text-slate-500 font-medium mt-1">
-                      Enter any email address where you want to receive the verification email.
-                    </p>
-                  </div>
-
-                  {/* Progress Indicator */}
-                  {(testStage === "connecting" || testStage === "authenticating" || testStage === "sending") && (
-                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
-                      <div className="flex items-center justify-between text-xs font-black uppercase tracking-wider text-slate-800">
-                        <span className="flex items-center gap-2">
-                          <RefreshCw className="w-3.5 h-3.5 text-sky-600 animate-spin" />
-                          <span>Connecting Outbound SMTP...</span>
-                        </span>
-                        <span className="text-sky-600">
-                          {testStage === "connecting" && "1 / 3 Handshake"}
-                          {testStage === "authenticating" && "2 / 3 Authenticating"}
-                          {testStage === "sending" && "3 / 3 Transmitting"}
-                        </span>
-                      </div>
-
-                      {/* Progress bar */}
-                      <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
-                        <div
-                          className="bg-sky-600 h-2 transition-all duration-300 rounded-full"
-                          style={{
-                            width:
-                              testStage === "connecting"
-                                ? "33%"
-                                : testStage === "authenticating"
-                                ? "66%"
-                                : "90%",
-                          }}
+                  {/* SMTP Server & Port */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                    <div className="sm:col-span-2">
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1">
+                        SMTP Host / Server <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. smtp.gmail.com"
+                        value={smtpHost}
+                        onChange={(e) => setSmtpHost(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs text-slate-900 font-bold focus:border-slate-900 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1">
+                        Port & SSL
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          value={smtpPort}
+                          onChange={(e) => setSmtpPort(Number(e.target.value))}
+                          className="w-20 px-2.5 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs text-slate-900 font-bold focus:border-slate-900 focus:outline-none"
                         />
+                        <label className="flex items-center gap-1 text-[11px] text-slate-700 font-bold cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={smtpSecure}
+                            onChange={(e) => setSmtpSecure(e.target.checked)}
+                            className="rounded text-sky-600 focus:ring-sky-500"
+                          />
+                          <span>SSL</span>
+                        </label>
                       </div>
+                    </div>
+                  </div>
 
-                      <p className="text-[11px] text-slate-500 font-medium text-center">
-                        {testStage === "connecting" && `Connecting socket to ${smtpHost}:${smtpPort}...`}
-                        {testStage === "authenticating" && `Authenticating ${smtpUser}...`}
-                        {testStage === "sending" && `Sending message payload to ${testRecipient}...`}
-                      </p>
+                  {/* Username & Password */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1">
+                        SMTP Username / Email <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. careers@company.com"
+                        value={smtpUser}
+                        onChange={(e) => handleUserChange(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs text-slate-900 font-bold focus:border-slate-900 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1">
+                        SMTP Password / App Key <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          required
+                          placeholder="••••••••••••••••"
+                          value={smtpPassword}
+                          onChange={(e) => setSmtpPassword(e.target.value)}
+                          className="w-full px-3.5 py-2.5 pr-10 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs text-slate-900 font-bold focus:border-slate-900 focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                        >
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {directSaveError && (
+                    <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                      <span>{directSaveError}</span>
                     </div>
                   )}
 
-                  {/* Meaningful Error Display */}
-                  {testStage === "error" && (
-                    <div className="p-4 bg-rose-50 rounded-2xl border border-rose-200 space-y-2">
-                      <div className="flex items-center gap-2 text-rose-900 font-bold text-xs">
-                        <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                        <span>SMTP Connection Failed</span>
-                      </div>
-                      <p className="text-xs text-rose-800 leading-relaxed font-medium">
-                        {testErrorMessage}
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
+                  {/* Step 1 Footer */}
+                  <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
                     <button
                       type="button"
-                      onClick={() => setShowTestModal(false)}
-                      disabled={testStage === "connecting" || testStage === "authenticating" || testStage === "sending"}
-                      className="text-xs font-black uppercase tracking-wider text-slate-500 hover:text-slate-900 cursor-pointer"
+                      onClick={() => setShowConfigModal(false)}
+                      disabled={isSavingDirectly}
+                      className="px-4 py-2.5 text-xs font-black uppercase tracking-wider text-slate-500 hover:text-slate-900 cursor-pointer disabled:opacity-50"
                     >
                       Cancel
                     </button>
-                    <button
-                      type="submit"
-                      disabled={testStage === "connecting" || testStage === "authenticating" || testStage === "sending"}
-                      className="px-6 py-3 bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white rounded-full font-black text-xs uppercase tracking-widest flex items-center gap-2 shadow-md shadow-sky-600/25 cursor-pointer"
-                    >
-                      {testStage === "connecting" || testStage === "authenticating" || testStage === "sending" ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                          <span>Verifying...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Send className="w-4 h-4" />
-                          <span>Send Test Email</span>
-                        </>
-                      )}
-                    </button>
+                    <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                      <button
+                        type="button"
+                        disabled={isSavingDirectly}
+                        onClick={() => handleSaveAndConnectDirectly()}
+                        className="flex-1 sm:flex-initial px-5 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-full font-black text-xs uppercase tracking-widest flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/20 cursor-pointer transition-colors"
+                      >
+                        {isSavingDirectly ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>Saving to Database...</span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>Save & Connect Email</span>
+                          </>
+                        )}
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isSavingDirectly}
+                        className="flex-1 sm:flex-initial px-5 py-3 bg-slate-900 hover:bg-slate-800 disabled:opacity-60 text-white rounded-full font-black text-xs uppercase tracking-widest flex items-center justify-center gap-1.5 shadow-md cursor-pointer transition-colors"
+                      >
+                        <span>Next: Check Connection</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 </form>
+              ) : (
+                /* STEP 2: Check Connection & Send Test Email */
+                <div className="space-y-4">
+                  {/* Summary of credentials */}
+                  <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-1">
+                    <div className="flex items-center justify-between text-slate-600">
+                      <span>Server & Port:</span>
+                      <span className="font-bold text-slate-900">{smtpHost}:{smtpPort} {smtpSecure ? "(SSL)" : "(STARTTLS)"}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-slate-600">
+                      <span>SMTP User:</span>
+                      <span className="font-bold text-slate-900 truncate max-w-[200px]">{smtpUser}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-slate-600">
+                      <span>From Email:</span>
+                      <span className="font-bold text-slate-900 truncate max-w-[200px]">{fromEmail || smtpUser}</span>
+                    </div>
+                    <div className="pt-1 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTestStage("idle");
+                          setModalStep(1);
+                        }}
+                        className="text-[11px] font-bold text-sky-600 hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <ArrowLeft className="w-3 h-3" />
+                        <span>Edit Credentials</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {testStage === "success" ? (
+                    /* Success State */
+                    <div className="text-center py-4 space-y-4 animate-in fade-in">
+                      <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-inner">
+                        <CheckCircle2 className="w-8 h-8" />
+                      </div>
+                      <div className="space-y-1">
+                        <h3 className="text-base font-black text-slate-900 uppercase tracking-tight">
+                          Connection Successful!
+                        </h3>
+                        <p className="text-xs text-slate-600 font-medium">
+                          {testSuccessMessage}
+                        </p>
+                      </div>
+
+                      <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 text-xs text-emerald-900 text-left space-y-1">
+                        <p className="font-bold flex items-center gap-1.5 text-emerald-800">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <span>Integration Verified & Active</span>
+                        </p>
+                        <p className="text-[11px] text-emerald-800 leading-relaxed">
+                          A real verification email was successfully delivered to <strong>{testRecipient}</strong>. Candidate notifications will now be automatically dispatched through this connection.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowConfigModal(false)}
+                        className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-full font-black text-xs uppercase tracking-widest shadow-md transition-colors cursor-pointer"
+                      >
+                        Done & Close
+                      </button>
+                    </div>
+                  ) : (
+                    /* Check Connection Form */
+                    <form onSubmit={runSmtpTest} className="space-y-4">
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1.5">
+                          Recipient Email for Connection Check <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="email"
+                          required
+                          placeholder="e.g. your-email@gmail.com"
+                          value={testRecipient}
+                          onChange={(e) => setTestRecipient(e.target.value)}
+                          disabled={testStage === "connecting" || testStage === "authenticating" || testStage === "sending"}
+                          className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-2xl text-xs text-slate-900 font-bold focus:border-slate-900 focus:outline-none"
+                        />
+                        <p className="text-[11px] text-slate-500 font-medium mt-1">
+                          We will send a live verification email to this address to verify your SMTP host, port, and credentials.
+                        </p>
+                      </div>
+
+                      {/* Progress Animation */}
+                      {(testStage === "connecting" || testStage === "authenticating" || testStage === "sending") && (
+                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                          <div className="flex items-center justify-between text-xs font-black uppercase tracking-wider text-slate-800">
+                            <span className="flex items-center gap-2">
+                              <RefreshCw className="w-3.5 h-3.5 text-sky-600 animate-spin" />
+                              <span>Checking Connection...</span>
+                            </span>
+                            <span className="text-sky-600">
+                              {testStage === "connecting" && "1 / 3 Socket Handshake"}
+                              {testStage === "authenticating" && "2 / 3 Authenticating"}
+                              {testStage === "sending" && "3 / 3 Transmitting"}
+                            </span>
+                          </div>
+
+                          {/* Progress Bar */}
+                          <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                            <div
+                              className="bg-sky-600 h-2 transition-all duration-300 rounded-full"
+                              style={{
+                                width:
+                                  testStage === "connecting"
+                                    ? "33%"
+                                    : testStage === "authenticating"
+                                    ? "66%"
+                                    : "90%",
+                              }}
+                            />
+                          </div>
+
+                          <p className="text-[11px] text-slate-500 font-medium text-center">
+                            {testStage === "connecting" && `Opening socket connection to ${smtpHost}:${smtpPort}...`}
+                            {testStage === "authenticating" && `Validating credentials for ${smtpUser}...`}
+                            {testStage === "sending" && `Sending verification email to ${testRecipient}...`}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Error Message Display */}
+                      {testStage === "error" && (
+                        <div className="p-4 bg-rose-50 rounded-2xl border border-rose-200 space-y-2">
+                          <div className="flex items-center gap-2 text-rose-900 font-bold text-xs">
+                            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                            <span>Connection Verification Failed</span>
+                          </div>
+                          <p className="text-xs text-rose-800 leading-relaxed font-medium">
+                            {testErrorMessage}
+                          </p>
+                          <div className="pt-2 flex items-center justify-between gap-2 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTestStage("idle");
+                                setModalStep(1);
+                              }}
+                              className="text-xs font-bold text-rose-900 underline cursor-pointer"
+                            >
+                              ← Go Back to Step 1 & Check Credentials
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleSaveAndConnectDirectly()}
+                              className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-black uppercase tracking-wider cursor-pointer shadow-xs transition-colors flex items-center gap-1.5"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Save & Connect Anyway</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Step 2 Footer Buttons */}
+                      <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTestStage("idle");
+                            setModalStep(1);
+                          }}
+                          disabled={testStage === "connecting" || testStage === "authenticating" || testStage === "sending"}
+                          className="px-4 py-2.5 text-xs font-black uppercase tracking-wider text-slate-500 hover:text-slate-900 cursor-pointer flex items-center gap-1.5"
+                        >
+                          <ArrowLeft className="w-3.5 h-3.5" />
+                          <span>Back</span>
+                        </button>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleSaveAndConnectDirectly()}
+                            disabled={testStage === "connecting" || testStage === "authenticating" || testStage === "sending"}
+                            className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-full font-black text-xs uppercase tracking-wider cursor-pointer transition-colors"
+                          >
+                            <span>Connect Without Test</span>
+                          </button>
+
+                          <button
+                            type="submit"
+                            disabled={testStage === "connecting" || testStage === "authenticating" || testStage === "sending"}
+                            className="px-6 py-3 bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white rounded-full font-black text-xs uppercase tracking-widest flex items-center gap-2 shadow-md shadow-sky-600/25 cursor-pointer"
+                          >
+                            {testStage === "connecting" || testStage === "authenticating" || testStage === "sending" ? (
+                              <>
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                                <span>Testing Connection...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Send className="w-4 h-4" />
+                                <span>Check Connection</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </form>
+                  )}
+                </div>
               )}
             </div>
           </div>

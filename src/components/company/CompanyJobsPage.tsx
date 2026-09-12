@@ -21,6 +21,7 @@ import { useApp } from "../../context/AppContext";
 import { CompanyEditJobModal } from "./CompanyEditJobModal";
 import { CompanyJobCandidatesModal } from "./CompanyJobCandidatesModal";
 import { JobStatus, Job } from "../../types";
+import { safeStorage } from "../../utils/safeStorage";
 
 const DRAFT_STORAGE_KEY = "swipehired_new_job_draft";
 
@@ -47,17 +48,10 @@ export const CompanyJobsPage: React.FC = () => {
   const [savedLocalDraft, setSavedLocalDraft] = useState<any>(null);
 
   const checkLocalDraft = () => {
-    const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw);
-        if (parsed && parsed.title) {
-          setSavedLocalDraft(parsed);
-          return;
-        }
-      } catch (e) {
-        console.error(e);
-      }
+    const parsed = safeStorage.getJSON<any>(DRAFT_STORAGE_KEY, null);
+    if (parsed && parsed.title) {
+      setSavedLocalDraft(parsed);
+      return;
     }
     setSavedLocalDraft(null);
   };
@@ -67,7 +61,7 @@ export const CompanyJobsPage: React.FC = () => {
   }, [isAddJobModalOpen]);
 
   const handleDiscardLocalDraft = () => {
-    localStorage.removeItem(DRAFT_STORAGE_KEY);
+    safeStorage.removeItem(DRAFT_STORAGE_KEY);
     setSavedLocalDraft(null);
   };
 

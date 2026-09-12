@@ -1,5 +1,5 @@
 import { ParsedResumeResult } from "./types";
-import { BrowserResumeParser, ParsingProgressCallback, AIResumePayload } from "../resume";
+import type { ParsingProgressCallback, AIResumePayload } from "../resume";
 
 export class ResumeParser {
   /**
@@ -28,7 +28,8 @@ export class ResumeParser {
           });
         }
 
-        // 1. Browser-first extraction (PDF coordinate sorting, DOCX, selective OCR, text cleaning)
+        // 1. Browser-first extraction (dynamically loaded to keep initial landing page bundle lightweight)
+        const { BrowserResumeParser } = await import("../resume/browserResumeParser");
         const extractionResult = await BrowserResumeParser.parse(file, onProgress);
         clientExtractedText = extractionResult.cleanedText;
 

@@ -14,8 +14,13 @@ import {
   Camera,
   ArrowRight,
   ShieldAlert,
+  Edit2,
+  Trash2,
+  Globe,
+  ExternalLink,
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
+import { EducationItem, ExperienceItem, ProjectItem } from "../../types";
 
 export const CandidateProfileReview: React.FC = () => {
   const {
@@ -47,6 +52,32 @@ export const CandidateProfileReview: React.FC = () => {
   const [newSkillInput, setNewSkillInput] = useState("");
   const [showErrorBanner, setShowErrorBanner] = useState(false);
 
+  // Education state & form
+  const [education, setEducation] = useState<EducationItem[]>(candidate.education || []);
+  const [isAddingEdu, setIsAddingEdu] = useState(false);
+  const [editingEduIndex, setEditingEduIndex] = useState<number | null>(null);
+  const [eduDegree, setEduDegree] = useState("");
+  const [eduInstitution, setEduInstitution] = useState("");
+  const [eduYear, setEduYear] = useState("");
+
+  // Projects state & form
+  const [projects, setProjects] = useState<ProjectItem[]>(candidate.projects || []);
+  const [isAddingProj, setIsAddingProj] = useState(false);
+  const [editingProjIndex, setEditingProjIndex] = useState<number | null>(null);
+  const [projName, setProjName] = useState("");
+  const [projDescription, setProjDescription] = useState("");
+  const [projTechnologies, setProjTechnologies] = useState("");
+  const [projLink, setProjLink] = useState("");
+
+  // Experience state & form
+  const [experience, setExperience] = useState<ExperienceItem[]>(candidate.experience || []);
+  const [isAddingExp, setIsAddingExp] = useState(false);
+  const [editingExpIndex, setEditingExpIndex] = useState<number | null>(null);
+  const [expTitle, setExpTitle] = useState("");
+  const [expCompany, setExpCompany] = useState("");
+  const [expDuration, setExpDuration] = useState("");
+  const [expDescription, setExpDescription] = useState("");
+
   // Sync state whenever candidate object is updated (e.g. via AI extraction)
   React.useEffect(() => {
     if (candidate) {
@@ -72,6 +103,9 @@ export const CandidateProfileReview: React.FC = () => {
       if (candidate.bio) setBio(candidate.bio);
       if (candidate.profilePhoto) setProfilePhoto(candidate.profilePhoto);
       if (candidate.skills && candidate.skills.length > 0) setSkills(candidate.skills);
+      if (candidate.education) setEducation(candidate.education);
+      if (candidate.projects) setProjects(candidate.projects);
+      if (candidate.experience) setExperience(candidate.experience);
     }
   }, [candidate]);
 
@@ -93,6 +127,159 @@ export const CandidateProfileReview: React.FC = () => {
 
   const handleRemoveSkill = (skillToRemove: string) => {
     setSkills(skills.filter((s) => s !== skillToRemove));
+  };
+
+  // Education Handlers
+  const handleSaveEducation = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!eduDegree.trim() || !eduInstitution.trim()) return;
+
+    const newEdu: EducationItem = {
+      id: editingEduIndex !== null ? education[editingEduIndex]?.id || `edu_${Date.now()}` : `edu_${Date.now()}`,
+      degree: eduDegree.trim(),
+      institution: eduInstitution.trim(),
+      year: eduYear.trim() || new Date().getFullYear().toString(),
+    };
+
+    if (editingEduIndex !== null) {
+      const copy = [...education];
+      copy[editingEduIndex] = newEdu;
+      setEducation(copy);
+      setEditingEduIndex(null);
+    } else {
+      setEducation([...education, newEdu]);
+      setIsAddingEdu(false);
+    }
+
+    setEduDegree("");
+    setEduInstitution("");
+    setEduYear("");
+  };
+
+  const handleStartEditEducation = (index: number) => {
+    const item = education[index];
+    if (!item) return;
+    setEditingEduIndex(index);
+    setIsAddingEdu(false);
+    setEduDegree(item.degree);
+    setEduInstitution(item.institution);
+    setEduYear(item.year);
+  };
+
+  const handleDeleteEducation = (index: number) => {
+    setEducation(education.filter((_, i) => i !== index));
+    if (editingEduIndex === index) {
+      setEditingEduIndex(null);
+      setEduDegree("");
+      setEduInstitution("");
+      setEduYear("");
+    }
+  };
+
+  // Projects Handlers
+  const handleSaveProject = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!projName.trim()) return;
+
+    const techsArray = projTechnologies
+      ? projTechnologies.split(",").map((t) => t.trim()).filter(Boolean)
+      : [];
+
+    const newProj: ProjectItem = {
+      id: editingProjIndex !== null ? projects[editingProjIndex]?.id || `proj_${Date.now()}` : `proj_${Date.now()}`,
+      name: projName.trim(),
+      description: projDescription.trim(),
+      technologies: techsArray,
+      link: projLink.trim() || undefined,
+    };
+
+    if (editingProjIndex !== null) {
+      const copy = [...projects];
+      copy[editingProjIndex] = newProj;
+      setProjects(copy);
+      setEditingProjIndex(null);
+    } else {
+      setProjects([...projects, newProj]);
+      setIsAddingProj(false);
+    }
+
+    setProjName("");
+    setProjDescription("");
+    setProjTechnologies("");
+    setProjLink("");
+  };
+
+  const handleStartEditProject = (index: number) => {
+    const item = projects[index];
+    if (!item) return;
+    setEditingProjIndex(index);
+    setIsAddingProj(false);
+    setProjName(item.name);
+    setProjDescription(item.description);
+    setProjTechnologies((item.technologies || []).join(", "));
+    setProjLink(item.link || "");
+  };
+
+  const handleDeleteProject = (index: number) => {
+    setProjects(projects.filter((_, i) => i !== index));
+    if (editingProjIndex === index) {
+      setEditingProjIndex(null);
+      setProjName("");
+      setProjDescription("");
+      setProjTechnologies("");
+      setProjLink("");
+    }
+  };
+
+  // Experience Handlers
+  const handleSaveExperience = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!expTitle.trim() || !expCompany.trim()) return;
+
+    const newExp: ExperienceItem = {
+      id: editingExpIndex !== null ? experience[editingExpIndex]?.id || `exp_${Date.now()}` : `exp_${Date.now()}`,
+      title: expTitle.trim(),
+      company: expCompany.trim(),
+      duration: expDuration.trim() || "Present",
+      description: expDescription.trim(),
+    };
+
+    if (editingExpIndex !== null) {
+      const copy = [...experience];
+      copy[editingExpIndex] = newExp;
+      setExperience(copy);
+      setEditingExpIndex(null);
+    } else {
+      setExperience([...experience, newExp]);
+      setIsAddingExp(false);
+    }
+
+    setExpTitle("");
+    setExpCompany("");
+    setExpDuration("");
+    setExpDescription("");
+  };
+
+  const handleStartEditExperience = (index: number) => {
+    const item = experience[index];
+    if (!item) return;
+    setEditingExpIndex(index);
+    setIsAddingExp(false);
+    setExpTitle(item.title);
+    setExpCompany(item.company);
+    setExpDuration(item.duration);
+    setExpDescription(item.description);
+  };
+
+  const handleDeleteExperience = (index: number) => {
+    setExperience(experience.filter((_, i) => i !== index));
+    if (editingExpIndex === index) {
+      setEditingExpIndex(null);
+      setExpTitle("");
+      setExpCompany("");
+      setExpDuration("");
+      setExpDescription("");
+    }
   };
 
   const handleSaveAndContinue = () => {
@@ -117,6 +304,9 @@ export const CandidateProfileReview: React.FC = () => {
       bio,
       profilePhoto,
       skills,
+      education,
+      projects,
+      experience,
       isCompleted: nextIsCompleted,
     });
 
@@ -178,13 +368,17 @@ export const CandidateProfileReview: React.FC = () => {
             {skills.length > 0 ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <AlertCircle className="w-3.5 h-3.5 text-red-500" />}
             <span>Skills ({skills.length})</span>
           </div>
-          <div className={`p-2 rounded-lg flex items-center gap-1.5 font-medium ${yearsOfExperience !== undefined ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}>
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Experience</span>
+          <div className={`p-2 rounded-lg flex items-center gap-1.5 font-medium ${experience.length > 0 ? "bg-emerald-50 text-emerald-800" : "bg-slate-100 text-slate-700"}`}>
+            {experience.length > 0 ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <AlertCircle className="w-3.5 h-3.5 text-slate-400" />}
+            <span>Experience ({experience.length})</span>
           </div>
-          <div className={`p-2 rounded-lg flex items-center gap-1.5 font-medium ${candidate.education?.length > 0 ? "bg-emerald-50 text-emerald-800" : "bg-slate-100 text-slate-700"}`}>
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Education (BCA)</span>
+          <div className={`p-2 rounded-lg flex items-center gap-1.5 font-medium ${education.length > 0 ? "bg-emerald-50 text-emerald-800" : "bg-slate-100 text-slate-700"}`}>
+            {education.length > 0 ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <AlertCircle className="w-3.5 h-3.5 text-slate-400" />}
+            <span>Education ({education.length})</span>
+          </div>
+          <div className={`p-2 rounded-lg flex items-center gap-1.5 font-medium ${projects.length > 0 ? "bg-emerald-50 text-emerald-800" : "bg-slate-100 text-slate-700"}`}>
+            {projects.length > 0 ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <AlertCircle className="w-3.5 h-3.5 text-slate-400" />}
+            <span>Projects ({projects.length})</span>
           </div>
           <div className={`p-2 rounded-lg flex items-center gap-1.5 font-medium ${profilePhoto ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}>
             {profilePhoto ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <AlertCircle className="w-3.5 h-3.5 text-red-500" />}
@@ -360,6 +554,18 @@ export const CandidateProfileReview: React.FC = () => {
               className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
             />
           </div>
+
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-bold text-slate-700 mb-1.5">Professional Bio & Summary</label>
+            <textarea
+              id="review-bio"
+              rows={3}
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              placeholder="Tell recruiters about your key achievements, superpowers, and what roles excite you..."
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
+            />
+          </div>
         </div>
 
         {/* Skills Chip Manager */}
@@ -413,49 +619,477 @@ export const CandidateProfileReview: React.FC = () => {
           </div>
         </div>
 
-        {/* Experience List Preview */}
-        <div className="space-y-3 pt-2">
-          <label className="block text-xs font-bold text-slate-700">Work Experience Extracted</label>
-          <div className="space-y-2">
-            {candidate.experience?.map((exp, idx) => (
-              <div key={idx} className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 text-xs">
-                <div className="flex items-center justify-between font-bold text-slate-900">
-                  <span>{exp.title}</span>
-                  <span className="text-slate-400 font-medium">{exp.duration}</span>
-                </div>
-                <div className="text-emerald-700 font-semibold mt-0.5">{exp.company}</div>
-                <p className="text-slate-600 mt-1 leading-relaxed">{exp.description}</p>
+        {/* Work Experience Section */}
+        <div className="space-y-4 pt-4 border-t border-slate-100">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Briefcase className="w-4 h-4 text-emerald-600" />
+              <label className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                Work Experience ({experience.length})
+              </label>
+            </div>
+            {!isAddingExp && editingExpIndex === null && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAddingExp(true);
+                  setExpTitle("");
+                  setExpCompany("");
+                  setExpDuration("");
+                  setExpDescription("");
+                }}
+                className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 shadow-xs"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Experience</span>
+              </button>
+            )}
+          </div>
+
+          {/* Add / Edit Experience Form */}
+          {(isAddingExp || editingExpIndex !== null) && (
+            <form onSubmit={handleSaveExperience} className="p-4 bg-emerald-50/60 border-2 border-emerald-200 rounded-2xl space-y-3 animate-in fade-in duration-150">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black uppercase tracking-tight text-emerald-900">
+                  {editingExpIndex !== null ? "Edit Work Experience" : "Add Work Experience"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddingExp(false);
+                    setEditingExpIndex(null);
+                  }}
+                  className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-            ))}
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-1">
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Job Title *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Senior Frontend Engineer"
+                    value={expTitle}
+                    onChange={(e) => setExpTitle(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-emerald-500 font-medium"
+                  />
+                </div>
+                <div className="sm:col-span-1">
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Company *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Acme Tech Solutions"
+                    value={expCompany}
+                    onChange={(e) => setExpCompany(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-emerald-500 font-medium"
+                  />
+                </div>
+                <div className="sm:col-span-1">
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Duration *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 2022 – Present"
+                    value={expDuration}
+                    onChange={(e) => setExpDuration(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-emerald-500 font-medium"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Responsibilities & Impact</label>
+                <textarea
+                  rows={2}
+                  placeholder="Key contributions, architectures built, metrics moved..."
+                  value={expDescription}
+                  onChange={(e) => setExpDescription(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-emerald-500 font-medium"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddingExp(false);
+                    setEditingExpIndex(null);
+                  }}
+                  className="px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-white rounded-lg cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+                >
+                  {editingExpIndex !== null ? "Save Changes" : "Add Experience"}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* Experience List */}
+          <div className="space-y-2.5">
+            {experience.length === 0 ? (
+              <div className="p-4 bg-slate-50 border border-dashed border-slate-300 rounded-2xl text-center text-xs text-slate-500">
+                No work experience added yet. Click "+ Add Experience" to showcase your roles.
+              </div>
+            ) : (
+              experience.map((exp, idx) => (
+                <div key={idx} className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 text-xs flex flex-col sm:flex-row sm:items-start justify-between gap-3 group hover:border-slate-300 transition-colors">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <strong className="text-sm font-bold text-slate-900">{exp.title}</strong>
+                      <span className="px-2 py-0.5 rounded-md bg-slate-200 text-slate-700 text-[10px] font-semibold">
+                        {exp.duration}
+                      </span>
+                    </div>
+                    <div className="text-emerald-700 font-bold">{exp.company}</div>
+                    {exp.description && (
+                      <p className="text-slate-600 leading-relaxed pt-1">{exp.description}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 self-end sm:self-start shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleStartEditExperience(idx)}
+                      className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-white rounded-lg transition-colors cursor-pointer"
+                      title="Edit Experience"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteExperience(idx)}
+                      className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-white rounded-lg transition-colors cursor-pointer"
+                      title="Delete Experience"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
-        {/* Education & Projects Preview */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2 text-xs">
-            <div className="flex items-center gap-1.5 font-bold text-slate-800">
+        {/* Education Section */}
+        <div className="space-y-4 pt-4 border-t border-slate-100">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
               <GraduationCap className="w-4 h-4 text-emerald-600" />
-              <span>Education</span>
+              <label className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                Education ({education.length})
+              </label>
             </div>
-            {candidate.education?.map((edu, i) => (
-              <div key={i} className="text-slate-600">
-                <strong className="text-slate-900 block">{edu.degree}</strong>
-                <span>{edu.institution} ({edu.year})</span>
-              </div>
-            ))}
+            {!isAddingEdu && editingEduIndex === null && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAddingEdu(true);
+                  setEduDegree("");
+                  setEduInstitution("");
+                  setEduYear(new Date().getFullYear().toString());
+                }}
+                className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 shadow-xs"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Education</span>
+              </button>
+            )}
           </div>
 
-          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2 text-xs">
-            <div className="flex items-center gap-1.5 font-bold text-slate-800">
-              <FolderGit2 className="w-4 h-4 text-sky-600" />
-              <span>Projects</span>
-            </div>
-            {candidate.projects?.map((proj, i) => (
-              <div key={i} className="text-slate-600">
-                <strong className="text-slate-900 block">{proj.name}</strong>
-                <p className="text-[11px] text-slate-500 line-clamp-1">{proj.description}</p>
+          {/* Add / Edit Education Form */}
+          {(isAddingEdu || editingEduIndex !== null) && (
+            <form onSubmit={handleSaveEducation} className="p-4 bg-emerald-50/60 border-2 border-emerald-200 rounded-2xl space-y-3 animate-in fade-in duration-150">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black uppercase tracking-tight text-emerald-900">
+                  {editingEduIndex !== null ? "Edit Education" : "Add Education"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddingEdu(false);
+                    setEditingEduIndex(null);
+                  }}
+                  className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-            ))}
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-1">
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Degree / Qualification *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. BCA, B.Tech Computer Science"
+                    value={eduDegree}
+                    onChange={(e) => setEduDegree(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-emerald-500 font-medium"
+                  />
+                </div>
+                <div className="sm:col-span-1">
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Institution / University *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Gujarat University"
+                    value={eduInstitution}
+                    onChange={(e) => setEduInstitution(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-emerald-500 font-medium"
+                  />
+                </div>
+                <div className="sm:col-span-1">
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Passing Year *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 2024"
+                    value={eduYear}
+                    onChange={(e) => setEduYear(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-emerald-500 font-medium"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddingEdu(false);
+                    setEditingEduIndex(null);
+                  }}
+                  className="px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-white rounded-lg cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+                >
+                  {editingEduIndex !== null ? "Save Changes" : "Add Education"}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* Education List */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {education.length === 0 ? (
+              <div className="sm:col-span-2 p-4 bg-slate-50 border border-dashed border-slate-300 rounded-2xl text-center text-xs text-slate-500">
+                No education records added yet. Click "+ Add Education" to add your degrees.
+              </div>
+            ) : (
+              education.map((edu, idx) => (
+                <div key={idx} className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 text-xs flex items-start justify-between gap-3 group hover:border-slate-300 transition-colors">
+                  <div className="space-y-1">
+                    <strong className="text-sm font-bold text-slate-900 block">{edu.degree}</strong>
+                    <div className="text-slate-600 font-medium">{edu.institution}</div>
+                    <span className="text-[11px] text-slate-400 font-semibold block">Class of {edu.year}</span>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleStartEditEducation(idx)}
+                      className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-white rounded-lg transition-colors cursor-pointer"
+                      title="Edit Education"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteEducation(idx)}
+                      className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-white rounded-lg transition-colors cursor-pointer"
+                      title="Delete Education"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Projects Section */}
+        <div className="space-y-4 pt-4 border-t border-slate-100">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <FolderGit2 className="w-4 h-4 text-sky-600" />
+              <label className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                Featured Projects ({projects.length})
+              </label>
+            </div>
+            {!isAddingProj && editingProjIndex === null && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAddingProj(true);
+                  setProjName("");
+                  setProjDescription("");
+                  setProjTechnologies("");
+                  setProjLink("");
+                }}
+                className="px-3 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-300 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 shadow-xs"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Project</span>
+              </button>
+            )}
+          </div>
+
+          {/* Add / Edit Project Form */}
+          {(isAddingProj || editingProjIndex !== null) && (
+            <form onSubmit={handleSaveProject} className="p-4 bg-sky-50/60 border-2 border-sky-200 rounded-2xl space-y-3 animate-in fade-in duration-150">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black uppercase tracking-tight text-sky-900">
+                  {editingProjIndex !== null ? "Edit Project" : "Add Project"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddingProj(false);
+                    setEditingProjIndex(null);
+                  }}
+                  className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Project Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. AI Portfolio Engine"
+                    value={projName}
+                    onChange={(e) => setProjName(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-sky-500 font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Project URL / GitHub Link (Optional)</label>
+                  <input
+                    type="url"
+                    placeholder="https://github.com/..."
+                    value={projLink}
+                    onChange={(e) => setProjLink(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-sky-500 font-medium"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Technologies Used (comma separated)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. React, TypeScript, Node.js, PostgreSQL"
+                  value={projTechnologies}
+                  onChange={(e) => setProjTechnologies(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-sky-500 font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Project Summary & Impact</label>
+                <textarea
+                  rows={2}
+                  placeholder="What problem did this project solve? What did you build?"
+                  value={projDescription}
+                  onChange={(e) => setProjDescription(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-sky-500 font-medium"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddingProj(false);
+                    setEditingProjIndex(null);
+                  }}
+                  className="px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-white rounded-lg cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+                >
+                  {editingProjIndex !== null ? "Save Changes" : "Add Project"}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* Projects List */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {projects.length === 0 ? (
+              <div className="sm:col-span-2 p-4 bg-slate-50 border border-dashed border-slate-300 rounded-2xl text-center text-xs text-slate-500">
+                No projects added yet. Click "+ Add Project" to highlight your portfolio.
+              </div>
+            ) : (
+              projects.map((proj, idx) => (
+                <div key={idx} className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 text-xs flex flex-col justify-between gap-2.5 group hover:border-slate-300 transition-colors">
+                  <div className="space-y-1.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <strong className="text-sm font-bold text-slate-900 block">{proj.name}</strong>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {proj.link && (
+                          <a
+                            href={proj.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1 text-sky-600 hover:text-sky-800 rounded transition-colors"
+                            title="Visit Project"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleStartEditProject(idx)}
+                          className="p-1 text-slate-400 hover:text-slate-800 hover:bg-white rounded transition-colors cursor-pointer"
+                          title="Edit Project"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteProject(idx)}
+                          className="p-1 text-slate-400 hover:text-red-600 hover:bg-white rounded transition-colors cursor-pointer"
+                          title="Delete Project"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                    {proj.description && (
+                      <p className="text-slate-600 leading-relaxed line-clamp-3">{proj.description}</p>
+                    )}
+                  </div>
+
+                  {proj.technologies && proj.technologies.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1 border-t border-slate-200/60">
+                      {proj.technologies.map((t, ti) => (
+                        <span key={ti} className="px-2 py-0.5 bg-white border border-slate-200 text-slate-700 text-[10px] font-semibold rounded-md">
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
           </div>
         </div>
 
@@ -473,7 +1107,7 @@ export const CandidateProfileReview: React.FC = () => {
             onClick={handleSaveAndContinue}
             className="flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-md shadow-emerald-600/25 transition-all transform hover:-translate-y-0.5 cursor-pointer"
           >
-            <span>Complete Profile & Enter Career Radar</span>
+            <span>{candidate.commissionAgreementSigned ? "Save Profile Changes" : "Complete Profile & Enter Career Radar"}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>

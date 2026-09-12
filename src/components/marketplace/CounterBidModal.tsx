@@ -9,10 +9,16 @@ interface CounterBidModalProps {
 }
 
 export const CounterBidModal: React.FC<CounterBidModalProps> = ({ bid, onClose, onConfirm }) => {
-  const [proposedSalary, setProposedSalary] = useState(bid.salaryOffer);
-  const [proposedWorkMode, setProposedWorkMode] = useState<string>(bid.workMode);
+  const isReplyingToCompany = Boolean(bid.companyCounterDetails);
+  const defaultSalary = bid.companyCounterDetails?.revisedSalary || bid.counterOfferDetails?.proposedSalary || bid.salaryOffer;
+  const defaultWorkMode = bid.companyCounterDetails?.revisedWorkMode || bid.counterOfferDetails?.proposedWorkMode || bid.workMode;
+
+  const [proposedSalary, setProposedSalary] = useState(defaultSalary);
+  const [proposedWorkMode, setProposedWorkMode] = useState<string>(defaultWorkMode);
   const [note, setNote] = useState(
-    `Thank you for the upfront offer! Given my recent work on high-throughput systems, I would be excited to move forward with this adjusted compensation/work mode.`
+    isReplyingToCompany
+      ? `Thank you for reviewing my counter! Here is my response regarding the revised compensation/terms.`
+      : `Thank you for the upfront offer! Given my recent work on high-throughput systems, I would be excited to move forward with this adjusted compensation/work mode.`
   );
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -31,7 +37,7 @@ export const CounterBidModal: React.FC<CounterBidModalProps> = ({ bid, onClose, 
             </div>
             <div>
               <h3 className="text-lg font-black uppercase tracking-tight text-white">
-                Propose Counter-Offer
+                {isReplyingToCompany ? "Reply to Company Offer" : "Propose Counter-Offer"}
               </h3>
               <p className="text-xs text-slate-400 font-medium">
                 To {bid.companyName} · {bid.jobTitle}
@@ -47,15 +53,32 @@ export const CounterBidModal: React.FC<CounterBidModalProps> = ({ bid, onClose, 
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4 text-xs">
-          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl">
-            <span className="text-[10px] font-black uppercase text-slate-400 block mb-1">
-              Current Company Pitch
-            </span>
-            <div className="flex items-center justify-between font-bold text-slate-900">
-              <span>{bid.salaryOffer}</span>
-              <span className="text-slate-500 font-medium">({bid.workMode})</span>
+          {bid.companyCounterDetails ? (
+            <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl">
+              <span className="text-[10px] font-black uppercase text-emerald-800 block mb-1">
+                Company's Revised Proposal
+              </span>
+              <div className="flex items-center justify-between font-bold text-slate-900">
+                <span>{bid.companyCounterDetails.revisedSalary}</span>
+                <span className="text-emerald-700 font-medium">({bid.companyCounterDetails.revisedWorkMode})</span>
+              </div>
+              {bid.companyCounterDetails.note && (
+                <p className="text-[11px] italic text-slate-600 mt-1.5 pt-1.5 border-t border-emerald-200/60">
+                  "{bid.companyCounterDetails.note}"
+                </p>
+              )}
             </div>
-          </div>
+          ) : (
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl">
+              <span className="text-[10px] font-black uppercase text-slate-400 block mb-1">
+                Current Company Pitch
+              </span>
+              <div className="flex items-center justify-between font-bold text-slate-900">
+                <span>{bid.salaryOffer}</span>
+                <span className="text-slate-500 font-medium">({bid.workMode})</span>
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="block text-[10px] font-black uppercase tracking-widest text-slate-600 mb-1.5">
@@ -118,7 +141,7 @@ export const CounterBidModal: React.FC<CounterBidModalProps> = ({ bid, onClose, 
               type="submit"
               className="px-6 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-full text-xs font-black uppercase tracking-widest shadow-md shadow-amber-500/25 transition-all flex items-center gap-2 cursor-pointer"
             >
-              <span>Submit Counter-Offer</span>
+              <span>{isReplyingToCompany ? "Send Reply / Counter" : "Submit Counter-Offer"}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

@@ -25,6 +25,7 @@ import { SupabaseService } from "../services/supabaseService";
 import { supabase } from "../services/supabaseClient";
 import { calculateJobMatch } from "../utils/matchingEngine";
 import { DEFAULT_EMAIL_TEMPLATES, DEFAULT_WHATSAPP_TEMPLATES } from "../services/defaultTemplates";
+import { safeStorage } from "../utils/safeStorage";
 
 export const emptyCandidateProfile: CandidateProfile = {
   id: "",
@@ -211,7 +212,7 @@ interface AppContextType {
 
   // Company State
   company: CompanyProfile;
-  updateCompany: (updated: Partial<CompanyProfile>) => void;
+  updateCompany: (updated: Partial<CompanyProfile>) => Promise<boolean>;
   setCompany: React.Dispatch<React.SetStateAction<CompanyProfile>>;
   isCompanyProfileComplete: boolean;
 
@@ -265,6 +266,23 @@ interface AppContextType {
       note: string;
     }
   ) => void;
+  companyRespondToCounterOffer: (
+    bidId: string,
+    action: "accept" | "counter" | "decline",
+    details?: {
+      revisedSalary?: string;
+      revisedWorkMode?: string;
+      note?: string;
+    }
+  ) => void;
+  simulateCandidateCounterOffer: (
+    bidId: string,
+    counterData?: {
+      proposedSalary?: string;
+      proposedWorkMode?: string;
+      note?: string;
+    }
+  ) => void;
 
   // Anti-Ghosting SLA Database & Feedback Generator
   companySLAs: Record<string, CompanySLAInfo>;
@@ -291,7 +309,9 @@ interface AppContextType {
 
   // Communication & Templates
   emailTemplates: EmailTemplate[];
-  updateEmailTemplate: (id: string, template: Partial<EmailTemplate>) => void;
+  addEmailTemplate: (template: Omit<EmailTemplate, "id"> & { id?: string }) => Promise<EmailTemplate>;
+  updateEmailTemplate: (id: string, template: Partial<EmailTemplate>) => Promise<boolean>;
+  deleteEmailTemplate: (id: string) => Promise<boolean>;
   whatsAppTemplates: WhatsAppTemplate[];
   updateWhatsAppTemplate: (id: string, template: Partial<WhatsAppTemplate>) => void;
   sendEmailFromCompany: (
@@ -319,14 +339,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const isAuthLoading = authStatus === "AUTH_LOADING";
   const [authUser, setAuthUser] = useState<any | null>(null);
 
-  // Local storage persisted state or defaults
+  // Local storage persisted state or defaults (using safeStorage with in-memory fallback)
   const [role, setRole] = useState<UserRole>(() => {
-    const saved = localStorage.getItem("swipehired_role");
+    const saved = safeStorage.getItem("swipehired_role");
     return (saved as UserRole) || null;
   });
 
   const [activeView, setActiveView] = useState<ActiveView>(() => {
-    const savedView = localStorage.getItem("swipehired_activeView");
+    const savedView = safeStorage.getItem("swipehired_activeView");
     if (savedView) return savedView as ActiveView;
     return "landing";
   });
@@ -341,44 +361,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Profiles
   const [candidate, setCandidate] = useState<CandidateProfile>(() => {
-    const saved = localStorage.getItem("swipehired_candidate");
-    return saved ? JSON.parse(saved) : emptyCandidateProfile;
+    return safeStorage.getJSON<CandidateProfile>("swipehired_candidate", emptyCandidateProfile);
   });
 
   const [company, setCompany] = useState<CompanyProfile>(() => {
-    const saved = localStorage.getItem("swipehired_company");
-    return saved ? JSON.parse(saved) : emptyCompanyProfile;
+    return safeStorage.getJSON<CompanyProfile>("swipehired_company", emptyCompanyProfile);
   });
 
   const [allCandidates, setAllCandidates] = useState<CandidateProfile[]>([]);
 
   // Jobs
   const [jobs, setJobs] = useState<Job[]>(() => {
-    const saved = localStorage.getItem("swipehired_jobs");
-    return saved ? JSON.parse(saved) : [];
+    return safeStorage.getJSON<Job[]>("swipehired_jobs", []);
   });
 
   // Applications
   const [applications, setApplications] = useState<Application[]>(() => {
-    const saved = localStorage.getItem("swipehired_applications");
-    return saved ? JSON.parse(saved) : [];
+    return safeStorage.getJSON<Application[]>("swipehired_applications", []);
   });
 
   // Reverse Hiring Marketplace (Blind Talent & Bids)
   const [blindTalentProfiles, setBlindTalentProfiles] = useState<BlindTalentProfile[]>(() => {
-    const saved = localStorage.getItem("swipehired_blind_talent");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      } catch {}
-    }
-    return [];
+    const raw = safeStorage.getJSON<BlindTalentProfile[]>("swipehired_blind_talent", []);
+    return Array.isArray(raw) ? raw : [];
   });
 
   const [talentBids, setTalentBids] = useState<TalentBid[]>(() => {
-    const saved = localStorage.getItem("swipehired_talent_bids");
-    return saved ? JSON.parse(saved) : [];
+    return safeStorage.getJSON<TalentBid[]>("swipehired_talent_bids", []);
   });
 
   // Company SLAs
@@ -386,14 +395,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Swipes
   const [swipes, setSwipes] = useState<SwipeInteraction[]>(() => {
-    const saved = localStorage.getItem("swipehired_swipes");
-    return saved ? JSON.parse(saved) : [];
+    return safeStorage.getJSON<SwipeInteraction[]>("swipehired_swipes", []);
   });
 
   // Notifications
   const [notifications, setNotifications] = useState<NotificationItem[]>(() => {
-    const saved = localStorage.getItem("swipehired_notifications");
-    return saved ? JSON.parse(saved) : [];
+    return safeStorage.getJSON<NotificationItem[]>("swipehired_notifications", []);
   });
 
   // Templates
@@ -431,7 +438,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           SupabaseService.getCompanySLAs(),
           SupabaseService.getNotifications(),
           SupabaseService.getAdminReports(),
-          SupabaseService.getEmailTemplates(),
+          SupabaseService.getEmailTemplates(company.id || undefined),
           SupabaseService.getWhatsAppTemplates(),
         ]);
 
@@ -492,46 +499,46 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     refreshFromSupabase();
   }, [refreshFromSupabase]);
 
-  // Sync to local storage
+  // Sync to safe storage
   useEffect(() => {
-    if (role) localStorage.setItem("swipehired_role", role);
-    else localStorage.removeItem("swipehired_role");
+    if (role) safeStorage.setItem("swipehired_role", role);
+    else safeStorage.removeItem("swipehired_role");
   }, [role]);
 
   useEffect(() => {
-    localStorage.setItem("swipehired_activeView", activeView);
+    safeStorage.setItem("swipehired_activeView", activeView);
   }, [activeView]);
 
   useEffect(() => {
-    localStorage.setItem("swipehired_candidate", JSON.stringify(candidate));
+    safeStorage.setJSON("swipehired_candidate", candidate);
   }, [candidate]);
 
   useEffect(() => {
-    localStorage.setItem("swipehired_company", JSON.stringify(company));
+    safeStorage.setJSON("swipehired_company", company);
   }, [company]);
 
   useEffect(() => {
-    localStorage.setItem("swipehired_jobs", JSON.stringify(jobs));
+    safeStorage.setJSON("swipehired_jobs", jobs);
   }, [jobs]);
 
   useEffect(() => {
-    localStorage.setItem("swipehired_applications", JSON.stringify(applications));
+    safeStorage.setJSON("swipehired_applications", applications);
   }, [applications]);
 
   useEffect(() => {
-    localStorage.setItem("swipehired_swipes", JSON.stringify(swipes));
+    safeStorage.setJSON("swipehired_swipes", swipes);
   }, [swipes]);
 
   useEffect(() => {
-    localStorage.setItem("swipehired_notifications", JSON.stringify(notifications));
+    safeStorage.setJSON("swipehired_notifications", notifications);
   }, [notifications]);
 
   useEffect(() => {
-    localStorage.setItem("swipehired_blind_talent", JSON.stringify(blindTalentProfiles));
+    safeStorage.setJSON("swipehired_blind_talent", blindTalentProfiles);
   }, [blindTalentProfiles]);
 
   useEffect(() => {
-    localStorage.setItem("swipehired_talent_bids", JSON.stringify(talentBids));
+    safeStorage.setJSON("swipehired_talent_bids", talentBids);
   }, [talentBids]);
 
   // 72-Hour SLA Automatic Inactivity Expiration Checker
@@ -740,14 +747,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (bid.id !== bidId) return bid;
 
         if (action === "accept") {
+          const agreedSalary = bid.companyCounterDetails?.revisedSalary || bid.salaryOffer;
+          const agreedWorkMode = (bid.companyCounterDetails?.revisedWorkMode || bid.workMode) as any;
+
           // Reveal candidate details
           const updatedBid: TalentBid = {
             ...bid,
+            salaryOffer: agreedSalary,
+            workMode: agreedWorkMode,
             status: "accepted",
             candidateRevealedName: candidate.fullName,
             candidateRevealedEmail: candidate.email,
             candidateRevealedPhone: candidate.phone,
             candidateRevealedPhoto: candidate.profilePhoto,
+            negotiationHistory: [
+              ...(bid.negotiationHistory || []),
+              {
+                sender: "candidate",
+                senderName: candidate.fullName || "Anonymous Candidate",
+                salary: agreedSalary,
+                workMode: agreedWorkMode,
+                note: "Candidate accepted offer terms and revealed full profile details.",
+                timestamp: new Date().toISOString(),
+              },
+            ],
           };
 
           // Automatically convert into an active application in the company's pipeline
@@ -769,15 +792,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               candidateEmail: candidate.email,
               candidatePhone: candidate.phone,
               candidateBio: candidate.bio,
-              candidateExpectedSalary: bid.salaryOffer,
-              candidateWorkPreference: bid.workMode,
+              candidateExpectedSalary: agreedSalary,
+              candidateWorkPreference: agreedWorkMode,
               jobTitle: bid.jobTitle,
               companyId: bid.companyId,
               companyName: bid.companyName,
               companyLogo: bid.companyLogo,
               jobLocation: bid.companyLocation,
-              jobSalary: bid.salaryOffer,
-              jobWorkMode: bid.workMode,
+              jobSalary: agreedSalary,
+              jobWorkMode: agreedWorkMode,
               status: "interview",
               appliedAt: new Date().toISOString(),
               lastUpdatedAt: new Date().toISOString(),
@@ -785,7 +808,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               fitVerdict: "Fast-Track Blind Bid Accepted · Direct Interview",
               matchedSkills: candidate.skills.slice(0, 5),
               matchReasons: [
-                `Direct upfront offer accepted (${bid.salaryOffer})`,
+                `Direct upfront offer accepted (${agreedSalary})`,
                 "Fast-track 72h talent bid converted",
               ],
               strengths: [
@@ -803,7 +826,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 {
                   status: "interview",
                   timestamp: new Date().toISOString(),
-                  note: `Candidate accepted upfront offer of ${bid.salaryOffer} & revealed identity`,
+                  note: `Candidate accepted upfront offer of ${agreedSalary} & revealed identity`,
                 },
               ],
             };
@@ -819,7 +842,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             recipientId: bid.companyId,
             role: "company",
             title: `🎉 Bid Accepted! Candidate Identity Revealed`,
-            message: `${candidate.fullName} accepted your ${bid.salaryOffer} bid for '${bid.jobTitle}'. Full contact info and portfolio are now unlocked!`,
+            message: `${candidate.fullName} accepted your ${agreedSalary} bid for '${bid.jobTitle}'. Full contact info and portfolio are now unlocked!`,
             type: "status",
             linkAction: "pipeline",
           });
@@ -829,15 +852,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
 
         if (action === "counter") {
+          const proposedSalary = counterDetails?.proposedSalary || bid.salaryOffer;
+          const proposedWorkMode = counterDetails?.proposedWorkMode || bid.workMode;
+          const note = counterDetails?.note || "";
+
           const updatedBid: TalentBid = {
             ...bid,
             status: "countered",
+            lastActionBy: "candidate",
             counterOfferDetails: {
-              proposedSalary: counterDetails?.proposedSalary || bid.salaryOffer,
-              proposedWorkMode: counterDetails?.proposedWorkMode || bid.workMode,
-              note: counterDetails?.note || "",
+              proposedSalary,
+              proposedWorkMode,
+              note,
               counteredAt: new Date().toISOString(),
             },
+            negotiationHistory: [
+              ...(bid.negotiationHistory || []),
+              {
+                sender: "candidate",
+                senderName: candidate.fullName || "Anonymous Candidate",
+                salary: proposedSalary,
+                workMode: proposedWorkMode,
+                note,
+                timestamp: new Date().toISOString(),
+              },
+            ],
           };
 
           SupabaseService.saveTalentBid(updatedBid).catch(console.warn);
@@ -846,20 +885,298 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             recipientId: bid.companyId,
             role: "company",
             title: `💬 Counter-Offer Proposed on Blind Bid`,
-            message: `The candidate proposed ${counterDetails?.proposedSalary} (${counterDetails?.proposedWorkMode}) for '${bid.jobTitle}'.`,
+            message: `The candidate proposed ${proposedSalary} (${proposedWorkMode}) for '${bid.jobTitle}'.`,
             type: "status",
+            linkAction: "marketplace",
           });
 
           return updatedBid;
         }
 
         if (action === "decline") {
-          const updatedBid: TalentBid = { ...bid, status: "declined" };
+          const updatedBid: TalentBid = { ...bid, status: "declined", lastActionBy: "candidate" };
           SupabaseService.saveTalentBid(updatedBid).catch(console.warn);
           return updatedBid;
         }
 
         return bid;
+      })
+    );
+  };
+
+  const companyRespondToCounterOffer = (
+    bidId: string,
+    action: "accept" | "counter" | "decline",
+    details?: {
+      revisedSalary?: string;
+      revisedWorkMode?: string;
+      note?: string;
+    }
+  ) => {
+    setTalentBids((prev) =>
+      prev.map((bid) => {
+        if (bid.id !== bidId) return bid;
+
+        const targetCandidate = allCandidates.find((c) => c.id === bid.candidateId) || candidate;
+
+        if (action === "accept") {
+          // Recruiter accepts candidate's proposed counter-offer
+          const agreedSalary = bid.counterOfferDetails?.proposedSalary || bid.salaryOffer;
+          const agreedWorkMode = (bid.counterOfferDetails?.proposedWorkMode as WorkMode) || bid.workMode;
+
+          const updatedBid: TalentBid = {
+            ...bid,
+            status: "accepted",
+            salaryOffer: agreedSalary,
+            workMode: agreedWorkMode,
+            lastActionBy: "company",
+            candidateRevealedName: targetCandidate.fullName || "Verified Candidate",
+            candidateRevealedEmail: targetCandidate.email || "candidate@swipehired.dev",
+            candidateRevealedPhone: targetCandidate.phone || "+91 98765 43210",
+            candidateRevealedPhoto: targetCandidate.profilePhoto || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80",
+            negotiationHistory: [
+              ...(bid.negotiationHistory || []),
+              {
+                sender: "company",
+                senderName: company.companyName || "Hiring Team",
+                salary: agreedSalary,
+                workMode: agreedWorkMode,
+                note: details?.note || `Counter-offer accepted at ${agreedSalary}. Fast-tracking to interview!`,
+                timestamp: new Date().toISOString(),
+              },
+            ],
+          };
+
+          // Automatically convert into an active application in the company's pipeline
+          const existingApp = applications.find(
+            (a) => a.candidateId === bid.candidateId && a.companyId === bid.companyId
+          );
+
+          if (!existingApp) {
+            const newApp: Application = {
+              id: `app_bid_${Date.now()}`,
+              jobId: bid.jobId || "job_custom_bid",
+              candidateId: bid.candidateId,
+              candidateName: targetCandidate.fullName || "Verified Candidate",
+              candidateHeadline: targetCandidate.headline || "Engineering Talent",
+              candidatePhoto: targetCandidate.profilePhoto || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80",
+              candidateLocation: targetCandidate.location || "Ahmedabad, India",
+              candidateSkills: targetCandidate.skills?.length ? targetCandidate.skills : ["Software Engineering"],
+              candidateExpYears: targetCandidate.yearsOfExperience || 3,
+              candidateEmail: targetCandidate.email || "candidate@swipehired.dev",
+              candidatePhone: targetCandidate.phone || "+91 98765 43210",
+              candidateBio: targetCandidate.bio || "",
+              candidateExpectedSalary: agreedSalary,
+              candidateWorkPreference: agreedWorkMode,
+              jobTitle: bid.jobTitle,
+              companyId: bid.companyId,
+              companyName: bid.companyName,
+              companyLogo: bid.companyLogo,
+              jobLocation: bid.companyLocation,
+              jobSalary: agreedSalary,
+              jobWorkMode: agreedWorkMode,
+              status: "interview",
+              appliedAt: new Date().toISOString(),
+              lastUpdatedAt: new Date().toISOString(),
+              matchScore: 99,
+              fitVerdict: "Agreed on Counter-Offer · Identity Unlocked & Fast-Tracked",
+              matchedSkills: targetCandidate.skills?.slice(0, 5) || [],
+              matchReasons: [
+                `Agreed on candidate counter-offer (${agreedSalary})`,
+                "Fast-track 72h talent bid converted",
+              ],
+              matchConcerns: [],
+              aiSummary: `${bid.companyName} accepted candidate's counter-offer for ${bid.jobTitle} at ${agreedSalary}. Identity unlocked and moved to Interview.`,
+              timeline: [
+                {
+                  status: "applied",
+                  timestamp: bid.createdAt,
+                  note: `Company pitched upfront offer (${bid.salaryOffer}) in Blind Marketplace`,
+                },
+                {
+                  status: "interview",
+                  timestamp: new Date().toISOString(),
+                  note: `Company accepted candidate counter-offer of ${agreedSalary} (${agreedWorkMode}) & unlocked candidate identity`,
+                },
+              ],
+            };
+            setApplications((apps) => [newApp, ...apps]);
+            SupabaseService.saveApplication(newApp).catch(console.warn);
+          }
+
+          SupabaseService.saveTalentBid(updatedBid).catch(console.warn);
+
+          // Notify Candidate
+          addNotification({
+            recipientId: bid.candidateId,
+            role: "candidate",
+            title: `🎉 Counter Accepted by ${bid.companyName}!`,
+            message: `${bid.companyName} accepted your counter-offer of ${agreedSalary} for '${bid.jobTitle}'. Your identity is now unlocked and you are in their interview pipeline!`,
+            type: "offer",
+            linkAction: "applications",
+          });
+
+          // Notify Company
+          addNotification({
+            recipientId: bid.companyId,
+            role: "company",
+            title: `🤝 Counter-Offer Accepted`,
+            message: `You accepted the counter-offer for '${bid.jobTitle}' at ${agreedSalary}. ${targetCandidate.fullName}'s profile is now available in your Pipeline.`,
+            type: "status",
+            linkAction: "candidates",
+          });
+
+          triggerCelebration();
+          return updatedBid;
+        }
+
+        if (action === "counter") {
+          // Company sends a revised counter offer
+          const revisedSalary = details?.revisedSalary || bid.salaryOffer;
+          const revisedWorkMode = (details?.revisedWorkMode as WorkMode) || bid.workMode;
+          const replyNote = details?.note || "";
+
+          const updatedBid: TalentBid = {
+            ...bid,
+            status: "countered",
+            salaryOffer: revisedSalary,
+            workMode: revisedWorkMode,
+            lastActionBy: "company",
+            companyCounterDetails: {
+              revisedSalary,
+              revisedWorkMode,
+              note: replyNote,
+              repliedAt: new Date().toISOString(),
+            },
+            negotiationHistory: [
+              ...(bid.negotiationHistory || []),
+              {
+                sender: "company",
+                senderName: company.companyName || "Hiring Team",
+                salary: revisedSalary,
+                workMode: revisedWorkMode,
+                note: replyNote,
+                timestamp: new Date().toISOString(),
+              },
+            ],
+          };
+
+          SupabaseService.saveTalentBid(updatedBid).catch(console.warn);
+
+          // Notify Candidate
+          addNotification({
+            recipientId: bid.candidateId,
+            role: "candidate",
+            title: `💬 Revised Counter-Offer: ${bid.companyName}`,
+            message: `${bid.companyName} replied to your counter with a revised offer: ${revisedSalary} (${revisedWorkMode}). "${replyNote}"`,
+            type: "offer",
+            linkAction: "marketplace",
+          });
+
+          // Notify Company
+          addNotification({
+            recipientId: bid.companyId,
+            role: "company",
+            title: `📨 Revised Offer Sent to Candidate`,
+            message: `Your revised offer of ${revisedSalary} (${revisedWorkMode}) was dispatched to the candidate in the Blind Marketplace.`,
+            type: "status",
+          });
+
+          triggerCelebration();
+          return updatedBid;
+        }
+
+        if (action === "decline") {
+          const updatedBid: TalentBid = {
+            ...bid,
+            status: "declined",
+            lastActionBy: "company",
+            negotiationHistory: [
+              ...(bid.negotiationHistory || []),
+              {
+                sender: "company",
+                senderName: company.companyName || "Hiring Team",
+                salary: bid.salaryOffer,
+                workMode: bid.workMode,
+                note: details?.note || "Offer negotiation concluded.",
+                timestamp: new Date().toISOString(),
+              },
+            ],
+          };
+
+          SupabaseService.saveTalentBid(updatedBid).catch(console.warn);
+
+          addNotification({
+            recipientId: bid.candidateId,
+            role: "candidate",
+            title: `Offer Negotiation Closed (${bid.companyName})`,
+            message: `${bid.companyName} could not meet the requested counter-offer terms for '${bid.jobTitle}'.`,
+            type: "status",
+          });
+
+          return updatedBid;
+        }
+
+        return bid;
+      })
+    );
+  };
+
+  const simulateCandidateCounterOffer = (
+    bidId: string,
+    counterData?: {
+      proposedSalary?: string;
+      proposedWorkMode?: string;
+      note?: string;
+    }
+  ) => {
+    const defaultSalary = "₹5–6.5 LPA";
+    const defaultWorkMode = "Remote";
+    const defaultNote = "Thank you for the upfront offer! Given my recent project experience and technical benchmarks, I would be thrilled to move forward if we can align on ₹5–6.5 LPA.";
+
+    setTalentBids((prev) =>
+      prev.map((bid) => {
+        if (bid.id !== bidId) return bid;
+        const proposedSalary = counterData?.proposedSalary || defaultSalary;
+        const proposedWorkMode = counterData?.proposedWorkMode || defaultWorkMode;
+        const note = counterData?.note || defaultNote;
+
+        const updatedBid: TalentBid = {
+          ...bid,
+          status: "countered",
+          lastActionBy: "candidate",
+          counterOfferDetails: {
+            proposedSalary,
+            proposedWorkMode,
+            note,
+            counteredAt: new Date().toISOString(),
+          },
+          negotiationHistory: [
+            ...(bid.negotiationHistory || []),
+            {
+              sender: "candidate",
+              senderName: "Anonymous Candidate",
+              salary: proposedSalary,
+              workMode: proposedWorkMode,
+              note,
+              timestamp: new Date().toISOString(),
+            },
+          ],
+        };
+
+        SupabaseService.saveTalentBid(updatedBid).catch(console.warn);
+
+        addNotification({
+          recipientId: bid.companyId,
+          role: "company",
+          title: `💬 Counter-Offer Received!`,
+          message: `Candidate countered your offer for '${bid.jobTitle}' with ${proposedSalary} (${proposedWorkMode}): "${note}"`,
+          type: "status",
+          linkAction: "marketplace",
+        });
+
+        triggerCelebration();
+        return updatedBid;
       })
     );
   };
@@ -968,12 +1285,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   // Update Company
-  const updateCompany = (updated: Partial<CompanyProfile>) => {
-    setCompany((prev) => {
-      const next = { ...prev, ...updated };
-      SupabaseService.saveCompany(next).catch(console.warn);
-      return next;
-    });
+  const updateCompany = async (updated: Partial<CompanyProfile>): Promise<boolean> => {
+    const next: CompanyProfile = {
+      ...company,
+      ...updated,
+      userId: updated.userId || company.userId || authUser?.id,
+    };
+    // Persist to Supabase as single source of truth FIRST
+    await SupabaseService.saveCompany(next);
+    // Only commit to local state after persistence succeeds
+    setCompany(next);
+    return true;
   };
 
   // Add Job
@@ -1612,9 +1934,54 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return notifications.filter((n) => !n.read && (n.role === currentRole || role === "admin")).length;
   }, [notifications, role]);
 
-  // Templates
-  const updateEmailTemplate = (id: string, updated: Partial<EmailTemplate>) => {
-    setEmailTemplates((prev) => prev.map((t) => (t.id === id ? { ...t, ...updated } : t)));
+  // Email Templates CRUD with Supabase Persistence
+  const addEmailTemplate = async (
+    templateData: Omit<EmailTemplate, "id"> & { id?: string }
+  ): Promise<EmailTemplate> => {
+    const newId = templateData.id || `tmpl_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const newTemplate: EmailTemplate = {
+      ...templateData,
+      id: newId,
+      companyId: company.id || undefined,
+    };
+
+    if (company.id) {
+      await SupabaseService.saveEmailTemplate(newTemplate, company.id);
+    }
+    setEmailTemplates((prev) => [...prev, newTemplate]);
+    return newTemplate;
+  };
+
+  const updateEmailTemplate = async (
+    id: string,
+    updated: Partial<EmailTemplate>
+  ): Promise<boolean> => {
+    const existing = emailTemplates.find((t) => t.id === id);
+    if (!existing) {
+      throw new Error(`Email template with ID "${id}" not found.`);
+    }
+
+    const nextTemplate: EmailTemplate = {
+      ...existing,
+      ...updated,
+      companyId: company.id || existing.companyId,
+    };
+
+    if (company.id) {
+      await SupabaseService.saveEmailTemplate(nextTemplate, company.id);
+    }
+    setEmailTemplates((prev) => prev.map((t) => (t.id === id ? nextTemplate : t)));
+    return true;
+  };
+
+  const deleteEmailTemplate = async (id: string): Promise<boolean> => {
+    if (company.id) {
+      await SupabaseService.deleteEmailTemplate(id).catch((err) => {
+        console.warn("[deleteEmailTemplate] Database delete notice:", err.message);
+      });
+    }
+    setEmailTemplates((prev) => prev.filter((t) => t.id !== id));
+    return true;
   };
 
   const updateWhatsAppTemplate = (id: string, updated: Partial<WhatsAppTemplate>) => {
@@ -1686,23 +2053,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setAuthUser(null);
         setRole(null);
         setAuthStatus("UNAUTHENTICATED");
-        if (typeof window !== "undefined") {
-          localStorage.removeItem("swipehired_role");
-        }
+        safeStorage.removeItem("swipehired_role");
         return;
       }
 
       setAuthUser(session.user);
 
-      const savedOauthRole =
-        typeof window !== "undefined"
-          ? ((new URLSearchParams(window.location.search).get("oauth_role") as UserRole | null) ||
-            (window.location.hash
-              ? (new URLSearchParams(window.location.hash.replace(/^#/, "?")).get("oauth_role") as UserRole | null)
-              : null) ||
-            (sessionStorage.getItem("swipehired_oauth_role") as UserRole | null) ||
-            (localStorage.getItem("swipehired_oauth_role") as UserRole | null))
-          : null;
+      let savedOauthRole: UserRole | null = null;
+      try {
+        savedOauthRole =
+          typeof window !== "undefined"
+            ? ((new URLSearchParams(window.location.search).get("oauth_role") as UserRole | null) ||
+              (window.location.hash
+                ? (new URLSearchParams(window.location.hash.replace(/^#/, "?")).get("oauth_role") as UserRole | null)
+                : null) ||
+              (sessionStorage.getItem("swipehired_oauth_role") as UserRole | null) ||
+              (safeStorage.getItem("swipehired_oauth_role") as UserRole | null))
+            : null;
+      } catch {}
 
       const profileResult = await SupabaseService.fetchUserProfile(
         session.user,
@@ -1714,11 +2082,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       const resolvedRole: UserRole = profileResult.role;
 
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("swipehired_oauth_role");
-        sessionStorage.removeItem("swipehired_oauth_role");
-        document.cookie = "swipehired_oauth_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;";
-      }
+      safeStorage.removeItem("swipehired_oauth_role");
+      try {
+        if (typeof window !== "undefined") {
+          sessionStorage.removeItem("swipehired_oauth_role");
+          document.cookie = "swipehired_oauth_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;";
+        }
+      } catch {}
 
       // Check if user is returning from a fresh OAuth callback
       const isFreshOAuthCallback =
@@ -1735,13 +2105,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (resolvedRole === "company") {
         setRole("company");
         setAuthStatus("AUTHENTICATED_COMPANY");
-        localStorage.setItem("swipehired_role", "company");
+        safeStorage.setItem("swipehired_role", "company");
         if (profileResult.companyProfile) {
           setCompany(profileResult.companyProfile);
         }
 
         // Check if view needs to be routed to company workspace
-        const currentSavedView = localStorage.getItem("swipehired_activeView") || "landing";
+        const currentSavedView = safeStorage.getItem("swipehired_activeView") || "landing";
         const isCandidateOrAuthView =
           currentSavedView.startsWith("candidate-") ||
           currentSavedView === "landing" ||
@@ -1755,13 +2125,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       } else if (resolvedRole === "candidate") {
         setRole("candidate");
         setAuthStatus("AUTHENTICATED_CANDIDATE");
-        localStorage.setItem("swipehired_role", "candidate");
+        safeStorage.setItem("swipehired_role", "candidate");
         if (profileResult.candidateProfile) {
           setCandidate(profileResult.candidateProfile);
         }
 
         // Check if view needs to be routed to candidate workspace
-        const currentSavedView = localStorage.getItem("swipehired_activeView") || "landing";
+        const currentSavedView = safeStorage.getItem("swipehired_activeView") || "landing";
         const isCompanyOrAuthView =
           currentSavedView.startsWith("company-") ||
           currentSavedView === "landing" ||
@@ -1781,7 +2151,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       } else if (resolvedRole === "admin") {
         setRole("admin");
         setAuthStatus("AUTHENTICATED_ADMIN");
-        localStorage.setItem("swipehired_role", "admin");
+        safeStorage.setItem("swipehired_role", "admin");
         setActiveView("admin-overview");
       } else {
         setRole(null);
@@ -1911,7 +2281,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const resolvedRole: UserRole = res.role;
     setRole(resolvedRole);
     if (resolvedRole) {
-      localStorage.setItem("swipehired_role", resolvedRole);
+      safeStorage.setItem("swipehired_role", resolvedRole);
     }
 
     if (resolvedRole === "company") {
@@ -1971,21 +2341,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setTalentBids([]);
     setNotifications([]);
     setSwipes([]);
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("swipehired_candidate");
-      localStorage.removeItem("swipehired_company");
-      localStorage.removeItem("swipehired_role");
-      localStorage.removeItem("swipehired_oauth_role");
-      localStorage.removeItem("swipehired_activeView");
-      localStorage.removeItem("swipehired_jobs");
-      localStorage.removeItem("swipehired_applications");
-      localStorage.removeItem("swipehired_talent_bids");
-      localStorage.removeItem("swipehired_notifications");
-      localStorage.removeItem("swipehired_swipes");
-      localStorage.removeItem("swipehired_new_job_draft");
-      sessionStorage.removeItem("swipehired_oauth_role");
-      document.cookie = "swipehired_oauth_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;";
-    }
+    safeStorage.removeItem("swipehired_candidate");
+    safeStorage.removeItem("swipehired_company");
+    safeStorage.removeItem("swipehired_role");
+    safeStorage.removeItem("swipehired_oauth_role");
+    safeStorage.removeItem("swipehired_activeView");
+    safeStorage.removeItem("swipehired_jobs");
+    safeStorage.removeItem("swipehired_applications");
+    safeStorage.removeItem("swipehired_talent_bids");
+    safeStorage.removeItem("swipehired_notifications");
+    safeStorage.removeItem("swipehired_swipes");
+    safeStorage.removeItem("swipehired_new_job_draft");
+    try {
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem("swipehired_oauth_role");
+        document.cookie = "swipehired_oauth_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;";
+      }
+    } catch {}
     setActiveView("landing");
   };
 
@@ -2052,6 +2424,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         toggleCandidateListing,
         submitTalentBid,
         respondToTalentBid,
+        companyRespondToCounterOffer,
+        simulateCandidateCounterOffer,
         companySLAs,
         requestConstructiveFeedback,
         swipes,
@@ -2068,7 +2442,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         markAllNotificationsAsRead,
         unreadCount,
         emailTemplates,
+        addEmailTemplate,
         updateEmailTemplate,
+        deleteEmailTemplate,
         whatsAppTemplates,
         updateWhatsAppTemplate,
         sendEmailFromCompany,

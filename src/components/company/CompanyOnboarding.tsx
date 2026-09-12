@@ -37,23 +37,28 @@ export const CompanyOnboarding: React.FC = () => {
     "https://images.unsplash.com/photo-1563986768609-322da13575f3?w=200&auto=format&fit=crop&q=80",
   ];
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateCompany({
-      companyName,
-      website,
-      industry,
-      size,
-      location,
-      about,
-      culture,
-      logo,
-      benefits,
-      isCompleted: true,
-    });
-    triggerCelebration();
-    // Redirect to Company Hiring Cockpit (Spec #18)
-    setActiveView("company-cockpit");
+    try {
+      await updateCompany({
+        companyName,
+        website,
+        industry,
+        size,
+        location,
+        about,
+        culture,
+        logo,
+        benefits,
+        isCompleted: true,
+      });
+      triggerCelebration();
+      // Redirect to Company Hiring Cockpit (Spec #18)
+      setActiveView("company-cockpit");
+    } catch (err: any) {
+      console.error("[CompanyOnboarding] Submission failed:", err);
+      alert(`Failed to save onboarding details: ${err.message || "Please try again."}`);
+    }
   };
 
   return (

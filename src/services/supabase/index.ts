@@ -64,6 +64,8 @@ export const SupabaseService = {
   saveNotification: NotificationsService.saveNotification.bind(NotificationsService),
   getAdminReports: AdminService.getAdminReports.bind(AdminService),
   getEmailTemplates: TemplatesService.getEmailTemplates.bind(TemplatesService),
+  saveEmailTemplate: TemplatesService.saveEmailTemplate.bind(TemplatesService),
+  deleteEmailTemplate: TemplatesService.deleteEmailTemplate.bind(TemplatesService),
   getWhatsAppTemplates: TemplatesService.getWhatsAppTemplates.bind(TemplatesService),
 
   // Audit

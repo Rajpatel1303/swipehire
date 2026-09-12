@@ -125,6 +125,9 @@ export class MarketplaceService {
           candidateRevealedPhone: b.candidate_revealed_phone || undefined,
           candidateRevealedPhoto: b.candidate_revealed_photo || undefined,
           counterOfferDetails: b.counter_offer_details || undefined,
+          companyCounterDetails: b.company_counter_details || (b.counter_offer_details?.companyReply) || undefined,
+          lastActionBy: b.last_action_by || (b.counter_offer_details?.lastActionBy) || undefined,
+          negotiationHistory: b.negotiation_history || (b.counter_offer_details?.negotiationHistory) || [],
           expiresAt: b.expires_at,
           createdAt: b.created_at,
         };
@@ -140,7 +143,16 @@ export class MarketplaceService {
    */
   static async saveTalentBid(bid: TalentBid): Promise<boolean> {
     try {
-      const { error } = await supabase.from("talent_bids").upsert({
+      const enrichedCounterDetails = bid.counterOfferDetails
+        ? {
+            ...bid.counterOfferDetails,
+            companyReply: bid.companyCounterDetails || null,
+            lastActionBy: bid.lastActionBy || null,
+            negotiationHistory: bid.negotiationHistory || null,
+          }
+        : null;
+
+      const payload: any = {
         id: bid.id,
         blind_talent_id: bid.blindTalentId,
         candidate_id: bid.candidateId,
@@ -158,10 +170,30 @@ export class MarketplaceService {
         candidate_revealed_email: bid.candidateRevealedEmail,
         candidate_revealed_phone: bid.candidateRevealedPhone,
         candidate_revealed_photo: bid.candidateRevealedPhoto,
-        counter_offer_details: bid.counterOfferDetails as any,
+        counter_offer_details: enrichedCounterDetails as any,
+        company_counter_details: bid.companyCounterDetails as any,
+        last_action_by: bid.lastActionBy || null,
+        negotiation_history: bid.negotiationHistory as any,
         expires_at: bid.expiresAt,
         created_at: bid.createdAt || new Date().toISOString(),
-      });
+      };
+
+      let error: any = null;
+      if (bid.id) {
+        const updateRes = await (supabase.from("talent_bids") as any)
+          .update(payload)
+          .eq("id", bid.id)
+          .select("id");
+        if (!updateRes.error && updateRes.data && updateRes.data.length > 0) {
+          error = null;
+        } else {
+          const upsertRes = await (supabase.from("talent_bids") as any).upsert(payload);
+          error = upsertRes.error;
+        }
+      } else {
+        const upsertRes = await (supabase.from("talent_bids") as any).upsert(payload);
+        error = upsertRes.error;
+      }
 
       if (error) {
         console.warn("[MarketplaceService] Failed to save talent bid:", error.message);
