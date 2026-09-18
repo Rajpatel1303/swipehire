@@ -5,16 +5,11 @@ import {
   Zap,
   Lock,
   Scale,
-  FileText,
   Activity,
   ArrowUpRight,
   X,
-  CheckCircle2,
-  Users,
-  Briefcase,
   Clock,
   Cpu,
-  EyeOff,
   Radio,
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
@@ -26,18 +21,10 @@ export const Footer: React.FC = () => {
     setActiveView,
     role,
     authStatus,
-    jobs,
-    allCandidates,
-    applications,
     setIsAddJobModalOpen,
   } = useApp();
 
   const [activeModal, setActiveModal] = useState<PolicyModalType>(null);
-
-  // Dynamic live platform telemetry
-  const liveJobsCount = jobs && jobs.length > 0 ? jobs.filter((j) => j.status !== "Paused").length : 18;
-  const verifiedTalentCount = allCandidates && allCandidates.length > 0 ? allCandidates.length : 42;
-  const activeApplicationsCount = applications && applications.length > 0 ? applications.length : 14;
 
   const handleCandidateNav = (view: string) => {
     if (authStatus === "authenticated" && role === "candidate") {
@@ -72,78 +59,6 @@ export const Footer: React.FC = () => {
 
   return (
     <footer className="no-print print:hidden border-t border-slate-200/80 bg-slate-50/80 text-slate-900 font-sans backdrop-blur-xs">
-      {/* Live Platform Telemetry Bar */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 border-b border-slate-200/80 flex flex-col md:flex-row justify-between items-center gap-6">
-        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-6 sm:gap-10 w-full md:w-auto">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-orange-50 border border-orange-200 flex items-center justify-center text-orange-600 shrink-0">
-              <Briefcase className="w-4 h-4" />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Live Open Roles</p>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xl font-black tracking-tight text-slate-900">{liveJobsCount}</span>
-                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/60">Verified</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-sky-50 border border-sky-200 flex items-center justify-center text-sky-600 shrink-0">
-              <Users className="w-4 h-4" />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Pre-Vetted Talent</p>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xl font-black tracking-tight text-slate-900">{verifiedTalentCount}</span>
-                <span className="text-[10px] font-bold text-sky-600 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200/60">Skills Scored</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 shrink-0">
-              <Activity className="w-4 h-4" />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Active Pipeline</p>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xl font-black text-emerald-600 tracking-tight">{activeApplicationsCount}</span>
-                <span className="text-[10px] font-bold text-slate-500">Matches</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shrink-0">
-              <Clock className="w-4 h-4" />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Company SLA Target</p>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xl font-black text-orange-500 tracking-tight">&le; 24 hrs</span>
-                <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded border border-orange-200/60">Fast-Track</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setActiveModal("status")}
-          className="group flex items-center gap-2.5 px-3.5 py-1.5 bg-white hover:bg-slate-50 rounded-full border border-slate-200 shadow-2xs transition-all cursor-pointer"
-        >
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-          </span>
-          <p className="text-[11px] font-bold tracking-wide text-slate-700 group-hover:text-slate-900">
-            Systems: <span className="text-emerald-600 font-extrabold">All Operational</span>
-          </p>
-          <ArrowUpRight className="w-3 h-3 text-slate-400 group-hover:text-slate-600 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-        </button>
-      </div>
-
       {/* Main Footer Links & Architecture */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
