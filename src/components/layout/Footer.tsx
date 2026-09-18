@@ -28,6 +28,7 @@ export const Footer: React.FC = () => {
     role,
     authStatus,
     setIsAddJobModalOpen,
+    openAddJobModal,
   } = useApp();
 
   const [activeModal, setActiveModal] = useState<PolicyModalType>(null);
@@ -43,11 +44,14 @@ export const Footer: React.FC = () => {
     }
   }, [role]);
 
+  const isCandidate = role === "candidate" || authStatus === "AUTHENTICATED_CANDIDATE";
+  const isCompany = role === "company" || authStatus === "AUTHENTICATED_COMPANY";
+
   const handleCandidateNav = (view: string) => {
-    if (authStatus === "authenticated" && role === "candidate") {
+    if (isCandidate) {
       setActiveView(view);
-    } else if (authStatus === "authenticated") {
-      setActiveView(view);
+    } else if (isCompany) {
+      setActiveView("company-cockpit");
     } else {
       setActiveView("candidate-login");
     }
@@ -56,18 +60,22 @@ export const Footer: React.FC = () => {
 
   const handleCompanyNav = (view: string, openPostJob?: boolean) => {
     if (openPostJob) {
-      if (authStatus === "authenticated" && role === "company") {
-        setIsAddJobModalOpen(true);
+      if (isCompany) {
+        if (openAddJobModal) {
+          openAddJobModal();
+        } else {
+          setIsAddJobModalOpen(true);
+        }
       } else {
         setActiveView("company-login");
       }
       return;
     }
 
-    if (authStatus === "authenticated" && role === "company") {
+    if (isCompany) {
       setActiveView(view);
-    } else if (authStatus === "authenticated") {
-      setActiveView(view);
+    } else if (isCandidate) {
+      setActiveView("candidate-radar");
     } else {
       setActiveView("company-login");
     }
@@ -155,10 +163,7 @@ export const Footer: React.FC = () => {
 
                 <button
                   type="button"
-                  onClick={() => {
-                    setActiveView("blind-marketplace");
-                    window.scrollTo({ top: 0, behavior: "smooth" });
-                  }}
+                  onClick={() => handleCandidateNav("blind-marketplace")}
                   className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white hover:bg-amber-50 border border-slate-200/80 hover:border-amber-300 text-xs font-bold text-slate-700 hover:text-amber-600 shadow-2xs transition-all duration-200 hover:-translate-y-0.5 cursor-pointer"
                 >
                   <EyeOff className="w-3.5 h-3.5 text-amber-500" />
