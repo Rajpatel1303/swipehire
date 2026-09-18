@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   Sparkles,
   Zap,
@@ -17,6 +18,8 @@ import {
   GitCompare,
   MessageSquare,
   FileText,
+  CheckCircle2,
+  Cpu,
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 
@@ -33,6 +36,26 @@ export const Footer: React.FC = () => {
   } = useApp();
 
   const [activeModal, setActiveModal] = useState<PolicyModalType>(null);
+
+  // Close modal on Escape and prevent body scrolling while modal is open
+  useEffect(() => {
+    if (!activeModal) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setActiveModal(null);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [activeModal]);
 
   const isCompany =
     role === "company" ||
@@ -298,102 +321,268 @@ export const Footer: React.FC = () => {
         </div>
       </div>
 
-      {/* Interactive Policy Modal */}
-      {activeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+      {/* Interactive Policy Modal - Rendered via Portal to document.body for true viewport centering */}
+      {activeModal &&
+        typeof document !== "undefined" &&
+        createPortal(
           <div
-            className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-xl w-full max-h-[80vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200"
+            onClick={() => setActiveModal(null)}
+            role="dialog"
+            aria-modal="true"
           >
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
-              <div className="flex items-center gap-2">
-                {activeModal === "privacy" && <Lock className="w-4 h-4 text-emerald-600" />}
-                {activeModal === "terms" && <Scale className="w-4 h-4 text-sky-600" />}
-                {activeModal === "ethics" && <Sparkles className="w-4 h-4 text-orange-500" />}
-                {activeModal === "status" && <Activity className="w-4 h-4 text-emerald-600" />}
-                <h3 className="text-sm font-black text-slate-900">
-                  {activeModal === "privacy" && "In-Browser Privacy Guarantee"}
-                  {activeModal === "terms" && "Direct Placement Terms"}
-                  {activeModal === "ethics" && "AI Ethical Standards"}
-                  {activeModal === "status" && "System Infrastructure Status"}
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setActiveModal(null)}
-                className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="px-6 py-5 overflow-y-auto space-y-3.5 text-xs text-slate-600 leading-relaxed">
-              {activeModal === "privacy" && (
-                <>
-                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-950 flex items-start gap-2">
-                    <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <p className="font-semibold">
-                      Your resume is parsed locally in browser memory using WebAssembly &amp; PDF.js. Zero raw resume data is sold or stored without your application swipe.
+            <div
+              className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-200/90 overflow-hidden my-auto animate-in zoom-in-95 duration-200 text-slate-800"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="px-6 py-4.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-xs ${
+                      activeModal === "privacy"
+                        ? "bg-emerald-100 text-emerald-600"
+                        : activeModal === "terms"
+                        ? "bg-sky-100 text-sky-600"
+                        : activeModal === "ethics"
+                        ? "bg-amber-100 text-amber-600"
+                        : "bg-emerald-100 text-emerald-600"
+                    }`}
+                  >
+                    {activeModal === "privacy" && <ShieldCheck className="w-5 h-5" />}
+                    {activeModal === "terms" && <Scale className="w-5 h-5" />}
+                    {activeModal === "ethics" && <Sparkles className="w-5 h-5" />}
+                    {activeModal === "status" && <Activity className="w-5 h-5" />}
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-slate-900 tracking-tight leading-tight">
+                      {activeModal === "privacy" && "In-Browser Privacy Guarantee"}
+                      {activeModal === "terms" && "Direct Placement Terms"}
+                      {activeModal === "ethics" && "AI Ethical Standards"}
+                      {activeModal === "status" && "System Infrastructure Status"}
+                    </h3>
+                    <p className="text-[11px] font-semibold text-slate-400 mt-0.5">
+                      {activeModal === "privacy" && "Zero-Knowledge Local Parsing • WebAssembly Engine"}
+                      {activeModal === "terms" && "Transparent Compensation • 24h Review Turnaround"}
+                      {activeModal === "ethics" && "Merit-Based Gemini 2.5 • Zero Demographic Bias"}
+                      {activeModal === "status" && "Real-Time Telemetry & SLA Health"}
                     </p>
                   </div>
-                  <p>
-                    On the Blind Talent Marketplace, your identity stays completely anonymous until you choose to accept a company’s binding offer.
-                  </p>
-                </>
-              )}
-
-              {activeModal === "terms" && (
-                <>
-                  <p className="font-semibold text-slate-800">
-                    Transparent 10% milestone success fee upon verified candidate placement.
-                  </p>
-                  <p>
-                    All opportunities must list realistic salary brackets. Participating hiring teams commit to 24-hour review turnarounds to eliminate candidate ghosting.
-                  </p>
-                </>
-              )}
-
-              {activeModal === "ethics" && (
-                <>
-                  <p className="font-semibold text-slate-800">
-                    Explainable AI matching powered by Google Gemini 2.5 vectors.
-                  </p>
-                  <p>
-                    Scoring analyzes technical skills and verified project scope with zero demographic or visual weighting. Candidates retain full autonomy to tweak AI-parsed skills.
-                  </p>
-                </>
-              )}
-
-              {activeModal === "status" && (
-                <div className="space-y-2">
-                  <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
-                    <span className="font-bold text-slate-800">Cloudflare Edge &amp; SPA</span>
-                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Operational</span>
-                  </div>
-                  <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
-                    <span className="font-bold text-slate-800">Supabase DB &amp; Realtime</span>
-                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Connected</span>
-                  </div>
-                  <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
-                    <span className="font-bold text-slate-800">Google Gemini AI Engine</span>
-                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Available</span>
-                  </div>
                 </div>
-              )}
-            </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveModal(null)}
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors cursor-pointer shrink-0"
+                  aria-label="Close dialog"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
 
-            <div className="px-6 py-3 border-t border-slate-100 bg-slate-50/60 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setActiveModal(null)}
-                className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
-              >
-                Close
-              </button>
+              {/* Modal Content */}
+              <div className="px-6 py-5 overflow-y-auto max-h-[70vh] space-y-3.5 text-xs text-slate-600 leading-relaxed">
+                {activeModal === "privacy" && (
+                  <div className="space-y-3">
+                    <div className="p-3.5 bg-emerald-50/80 border border-emerald-200/80 rounded-2xl flex items-start gap-3">
+                      <div className="p-2 bg-emerald-100 text-emerald-700 rounded-xl shrink-0 mt-0.5">
+                        <Cpu className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-emerald-950">Local WebAssembly &amp; PDF.js Parsing</h4>
+                        <p className="text-[11px] text-emerald-800 leading-relaxed mt-0.5">
+                          Your resume is parsed 100% locally in your browser memory. No raw, unencrypted resume files are sold, scraped, or stored on external servers before you swipe.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 bg-slate-50 border border-slate-200/70 rounded-2xl flex items-start gap-3">
+                      <div className="p-2 bg-amber-100 text-amber-700 rounded-xl shrink-0 mt-0.5">
+                        <EyeOff className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900">Blind Talent Marketplace Anonymity</h4>
+                        <p className="text-[11px] text-slate-600 leading-relaxed mt-0.5">
+                          On reverse hiring auctions, your name, contact details, and employer stay strictly obscured until you explicitly accept a company’s upfront binding offer.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 bg-slate-50 border border-slate-200/70 rounded-2xl flex items-start gap-3">
+                      <div className="p-2 bg-violet-100 text-violet-700 rounded-xl shrink-0 mt-0.5">
+                        <Lock className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900">Full Candidate Data Sovereignty</h4>
+                        <p className="text-[11px] text-slate-600 leading-relaxed mt-0.5">
+                          You retain complete ownership over your parsed skills and history. Export, modify, or permanently purge your account data with zero residual traces.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeModal === "terms" && (
+                  <div className="space-y-3">
+                    <div className="p-3.5 bg-sky-50/80 border border-sky-200/80 rounded-2xl flex items-start gap-3">
+                      <div className="p-2 bg-sky-100 text-sky-700 rounded-xl shrink-0 mt-0.5">
+                        <CheckCircle2 className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-sky-950">Mandatory Upfront Compensation</h4>
+                        <p className="text-[11px] text-sky-800 leading-relaxed mt-0.5">
+                          All job listings and direct bids must publish realistic, verified salary and equity brackets. Deceptive or zero-salary postings are prohibited.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 bg-slate-50 border border-slate-200/70 rounded-2xl flex items-start gap-3">
+                      <div className="p-2 bg-amber-100 text-amber-700 rounded-xl shrink-0 mt-0.5">
+                        <Zap className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900">24-Hour Review Turnaround SLA</h4>
+                        <p className="text-[11px] text-slate-600 leading-relaxed mt-0.5">
+                          Participating hiring teams commit to a strict 24-hour response window on applications to eliminate recruiter ghosting and speed up hiring.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 bg-slate-50 border border-slate-200/70 rounded-2xl flex items-start gap-3">
+                      <div className="p-2 bg-emerald-100 text-emerald-700 rounded-xl shrink-0 mt-0.5">
+                        <Building2 className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900">Milestone Success Fee (Companies)</h4>
+                        <p className="text-[11px] text-slate-600 leading-relaxed mt-0.5">
+                          Free to browse and interview. Companies pay a transparent 10% milestone success fee only upon successful verified hire, backed by a 90-day guarantee.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeModal === "ethics" && (
+                  <div className="space-y-3">
+                    <div className="p-3.5 bg-amber-50/80 border border-amber-200/80 rounded-2xl flex items-start gap-3">
+                      <div className="p-2 bg-amber-100 text-amber-700 rounded-xl shrink-0 mt-0.5">
+                        <Sparkles className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-amber-950">Semantic Vector Matching (Google Gemini 2.5)</h4>
+                        <p className="text-[11px] text-amber-800 leading-relaxed mt-0.5">
+                          Candidate-to-role matching evaluates verified project scope, system architecture experience, and core engineering abilities using high-dimensional vector embeddings.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 bg-slate-50 border border-slate-200/70 rounded-2xl flex items-start gap-3">
+                      <div className="p-2 bg-rose-100 text-rose-700 rounded-xl shrink-0 mt-0.5">
+                        <EyeOff className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900">Zero Demographic or Visual Weighting</h4>
+                        <p className="text-[11px] text-slate-600 leading-relaxed mt-0.5">
+                          The AI pipeline strictly strips age, gender, ethnicity, photo imagery, and pedigree bias before computing candidate fit scores.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 bg-slate-50 border border-slate-200/70 rounded-2xl flex items-start gap-3">
+                      <div className="p-2 bg-indigo-100 text-indigo-700 rounded-xl shrink-0 mt-0.5">
+                        <User className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900">Candidate Agency &amp; Skill Calibration</h4>
+                        <p className="text-[11px] text-slate-600 leading-relaxed mt-0.5">
+                          Candidates can view explainable match breakdown reasons and retain full control to edit, correct, or add skills parsed by the model.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeModal === "status" && (
+                  <div className="space-y-2.5">
+                    <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-900">Cloudflare Edge &amp; SPA</p>
+                          <p className="text-[10px] text-slate-400">Global CDN • 100% Cache Hit Rate</p>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-black text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                        Operational
+                      </span>
+                    </div>
+
+                    <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-900">Supabase Postgres &amp; Realtime</p>
+                          <p className="text-[10px] text-slate-400">Database &amp; Instant WebSockets</p>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-black text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                        Connected
+                      </span>
+                    </div>
+
+                    <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-900">Google Gemini AI Engine</p>
+                          <p className="text-[10px] text-slate-400">Vector Embeddings &amp; Match Scoring</p>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-black text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                        Available
+                      </span>
+                    </div>
+
+                    <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-900">WebAssembly PDF Parser</p>
+                          <p className="text-[10px] text-slate-400">Local Browser In-Memory Sandbox</p>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-black text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                        Active
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="px-6 py-3.5 border-t border-slate-100 bg-slate-50/60 flex items-center justify-between">
+                <span className="text-[11px] font-medium text-slate-400">
+                  SwipeHired Trust &amp; Safety
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setActiveModal(null)}
+                  className={`px-4 py-1.5 rounded-xl text-xs font-bold text-white shadow-xs transition-all duration-200 hover:-translate-y-0.5 cursor-pointer ${
+                    activeModal === "privacy"
+                      ? "bg-emerald-600 hover:bg-emerald-700"
+                      : activeModal === "terms"
+                      ? "bg-sky-600 hover:bg-sky-700"
+                      : activeModal === "ethics"
+                      ? "bg-amber-600 hover:bg-amber-700"
+                      : "bg-slate-900 hover:bg-slate-800"
+                  }`}
+                >
+                  Got It
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </footer>
   );
 };
