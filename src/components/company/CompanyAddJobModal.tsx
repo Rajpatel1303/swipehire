@@ -16,6 +16,7 @@ import { useApp } from "../../context/AppContext";
 import { GeminiService } from "../../services/geminiService";
 import { Job, WorkMode } from "../../types";
 import { safeStorage } from "../../utils/safeStorage";
+import { CustomSelect } from "../common/CustomSelect";
 
 const DRAFT_STORAGE_KEY = "swipehired_new_job_draft";
 
@@ -444,16 +445,17 @@ export const CompanyAddJobModal: React.FC<CompanyAddJobModalProps> = ({ isOpen, 
 
                 <div>
                   <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1.5">Work Mode</label>
-                  <select
-                    id="job-workmode-select"
+                  <CustomSelect
                     value={workMode}
-                    onChange={(e) => setWorkMode(e.target.value as any)}
-                    className="w-full px-4 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-2xl text-xs text-slate-900 focus:border-slate-900 focus:outline-none font-bold"
-                  >
-                    <option value="Hybrid">Hybrid</option>
-                    <option value="Remote">Remote</option>
-                    <option value="Onsite">Onsite</option>
-                  </select>
+                    onChange={(val) => setWorkMode(val as WorkMode)}
+                    variant="card"
+                    size="md"
+                    options={[
+                      { value: "Hybrid", label: "Hybrid", sublabel: "Mix of remote and in-office" },
+                      { value: "Remote", label: "Remote", sublabel: "100% remote flexibility" },
+                      { value: "Onsite", label: "Onsite", sublabel: "Full-time in-office" },
+                    ]}
+                  />
                 </div>
 
                 <div>

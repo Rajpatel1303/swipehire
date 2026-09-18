@@ -241,12 +241,14 @@ export type Database = {
           headline: string
           id: string
           is_completed: boolean | null
+          is_suspended?: boolean | null
           learned_preferences: Json | null
           location: string
           phone: string | null
           possible_roles: string[] | null
           preferred_role: string | null
           profile_photo: string | null
+          photo_settings?: Json | null
           profile_strength: number | null
           projects: Json | null
           resume_filename: string | null
@@ -255,6 +257,7 @@ export type Database = {
           commission_agreement_signed_at: string | null
           commission_agreement_doc_id: string | null
           commission_agreement_signature: Json | null
+          github_data?: Json | null
           skills: string[] | null
           updated_at: string
           user_id: string | null
@@ -273,12 +276,14 @@ export type Database = {
           headline: string
           id: string
           is_completed?: boolean | null
+          is_suspended?: boolean | null
           learned_preferences?: Json | null
           location: string
           phone?: string | null
           possible_roles?: string[] | null
           preferred_role?: string | null
           profile_photo?: string | null
+          photo_settings?: Json | null
           profile_strength?: number | null
           projects?: Json | null
           resume_filename?: string | null
@@ -287,6 +292,7 @@ export type Database = {
           commission_agreement_signed_at?: string | null
           commission_agreement_doc_id?: string | null
           commission_agreement_signature?: Json | null
+          github_data?: Json | null
           skills?: string[] | null
           updated_at?: string
           user_id?: string | null
@@ -305,12 +311,14 @@ export type Database = {
           headline?: string
           id?: string
           is_completed?: boolean | null
+          is_suspended?: boolean | null
           learned_preferences?: Json | null
           location?: string
           phone?: string | null
           possible_roles?: string[] | null
           preferred_role?: string | null
           profile_photo?: string | null
+          photo_settings?: Json | null
           profile_strength?: number | null
           projects?: Json | null
           resume_filename?: string | null
@@ -319,6 +327,7 @@ export type Database = {
           commission_agreement_signed_at?: string | null
           commission_agreement_doc_id?: string | null
           commission_agreement_signature?: Json | null
+          github_data?: Json | null
           skills?: string[] | null
           updated_at?: string
           user_id?: string | null
@@ -349,8 +358,10 @@ export type Database = {
           industry: string
           is_completed: boolean | null
           is_verified: boolean | null
+          is_suspended?: boolean | null
           location: string
           logo: string | null
+          photo_settings?: Json | null
           phone: string | null
           size: string
           updated_at: string
@@ -370,8 +381,10 @@ export type Database = {
           industry: string
           is_completed?: boolean | null
           is_verified?: boolean | null
+          is_suspended?: boolean | null
           location: string
           logo?: string | null
+          photo_settings?: Json | null
           phone?: string | null
           size: string
           updated_at?: string
@@ -391,8 +404,10 @@ export type Database = {
           industry?: string
           is_completed?: boolean | null
           is_verified?: boolean | null
+          is_suspended?: boolean | null
           location?: string
           logo?: string | null
+          photo_settings?: Json | null
           phone?: string | null
           size?: string
           updated_at?: string
@@ -500,6 +515,7 @@ export type Database = {
           description: string
           experience: string
           id: string
+          is_featured?: boolean | null
           location: string
           match_concerns: string[] | null
           match_reasons: string[] | null
@@ -523,6 +539,7 @@ export type Database = {
           description: string
           experience: string
           id: string
+          is_featured?: boolean | null
           location: string
           match_concerns?: string[] | null
           match_reasons?: string[] | null
@@ -546,6 +563,7 @@ export type Database = {
           description?: string
           experience?: string
           id?: string
+          is_featured?: boolean | null
           location?: string
           match_concerns?: string[] | null
           match_reasons?: string[] | null

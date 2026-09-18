@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import { BlindTalentProfile, WorkMode } from "../../types";
+import { CustomSelect } from "../common/CustomSelect";
 
 interface SubmitBidModalProps {
   talent: BlindTalentProfile;
@@ -55,8 +56,7 @@ export const SubmitBidModal: React.FC<SubmitBidModalProps> = ({ talent, onClose 
     "Gym & Wellness Allowance",
   ];
 
-  const handleJobSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const jId = e.target.value;
+  const handleJobSelect = (jId: string) => {
     setSelectedJobId(jId);
     const matchedJob = jobs.find((j) => j.id === jId);
     if (matchedJob) {
@@ -159,33 +159,36 @@ export const SubmitBidModal: React.FC<SubmitBidModalProps> = ({ talent, onClose 
               <label className="block text-[10px] font-black uppercase tracking-widest text-slate-600 mb-1.5">
                 Associate with Job Opening
               </label>
-              <select
+              <CustomSelect
                 value={selectedJobId}
                 onChange={handleJobSelect}
-                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-900 focus:outline-none focus:border-emerald-500"
-              >
-                {jobs.map((j) => (
-                  <option key={j.id} value={j.id}>
-                    {j.title} ({j.department})
-                  </option>
-                ))}
-              </select>
+                variant="card"
+                size="md"
+                options={jobs.map((j) => ({
+                  value: j.id,
+                  label: j.title,
+                  sublabel: `${j.department} • ${j.location}`,
+                  badge: j.workMode,
+                }))}
+              />
             </div>
 
             <div>
               <label className="block text-[10px] font-black uppercase tracking-widest text-slate-600 mb-1.5">
                 Seniority Tier Offered
               </label>
-              <select
+              <CustomSelect
                 value={seniorityTier}
-                onChange={(e) => setSeniorityTier(e.target.value as any)}
-                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-900 focus:outline-none focus:border-emerald-500"
-              >
-                <option value="Mid-Level">Mid-Level Engineer</option>
-                <option value="Senior">Senior Engineer</option>
-                <option value="Lead">Team / Tech Lead</option>
-                <option value="Staff / Principal">Staff / Principal Architect</option>
-              </select>
+                onChange={(val) => setSeniorityTier(val as any)}
+                variant="card"
+                size="md"
+                options={[
+                  { value: "Mid-Level", label: "Mid-Level Engineer" },
+                  { value: "Senior", label: "Senior Engineer" },
+                  { value: "Lead", label: "Team / Tech Lead" },
+                  { value: "Staff / Principal", label: "Staff / Principal Architect" },
+                ]}
+              />
             </div>
           </div>
 

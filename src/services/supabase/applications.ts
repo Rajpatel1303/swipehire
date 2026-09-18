@@ -30,6 +30,7 @@ export class ApplicationsService {
           candidateName: cand.full_name || "Applicant",
           candidateHeadline: cand.headline || "",
           candidatePhoto: cand.profile_photo || "",
+          candidatePhotoSettings: (cand.photo_settings as any) || undefined,
           candidateLocation: cand.location || "",
           candidateSkills: cand.skills || [],
           candidateExpYears: Number(cand.years_of_experience || 0),
@@ -85,6 +86,13 @@ export class ApplicationsService {
    */
   static async saveApplication(app: Application): Promise<boolean> {
     try {
+      // 1. Fetch existing application for delta computation
+      const { data: existing } = await supabase
+        .from("applications")
+        .select("*, candidates(user_id)")
+        .eq("id", app.id)
+        .maybeSingle();
+
       const { error } = await supabase.from("applications").upsert({
         id: app.id,
         job_id: app.jobId,
@@ -122,14 +130,103 @@ export class ApplicationsService {
         return false;
       }
 
-      await AuditService.log({
-        actorId: app.companyId || app.candidateId,
-        actorRole: "system",
-        action: `application_status_${app.status}`,
-        entityType: "application",
-        entityId: app.id,
-        metadata: { jobId: app.jobId, status: app.status, matchScore: app.matchScore },
-      });
+      const targetCandidateUserId = (existing as any)?.candidates?.user_id;
+
+      // 2. Authoritative event tracking
+      if (!existing) {
+        // Initial application submission
+        await AuditService.log({
+          actorRole: "candidate",
+          targetUserId: targetCandidateUserId,
+          companyId: app.companyId,
+          action: "application_submitted",
+          entityType: "application",
+          entityId: app.id,
+          newData: { jobId: app.jobId, candidateId: app.candidateId, status: app.status },
+          metadata: { jobId: app.jobId, status: app.status, matchScore: app.matchScore },
+        });
+      } else {
+        // Stage / Status change
+        if (existing.status !== app.status) {
+          await AuditService.log({
+            actorRole: "company",
+            targetUserId: targetCandidateUserId,
+            companyId: app.companyId,
+            action: "candidate_stage_changed",
+            entityType: "application",
+            entityId: app.id,
+            oldData: { status: existing.status },
+            newData: { status: app.status },
+            metadata: {
+              jobId: app.jobId,
+              previousStage: existing.status,
+              newStage: app.status,
+              candidateName: app.candidateName,
+              jobTitle: app.jobTitle,
+            },
+          });
+
+          if (app.status === "shortlisted") {
+            await AuditService.log({
+              actorRole: "company",
+              targetUserId: targetCandidateUserId,
+              companyId: app.companyId,
+              action: "candidate_shortlisted",
+              entityType: "application",
+              entityId: app.id,
+              newData: { status: "shortlisted", candidateName: app.candidateName },
+            });
+          } else if (app.status === "rejected") {
+            await AuditService.log({
+              actorRole: "company",
+              targetUserId: targetCandidateUserId,
+              companyId: app.companyId,
+              action: "candidate_rejected",
+              entityType: "application",
+              entityId: app.id,
+              newData: { status: "rejected", reason: app.rejectionReason },
+              metadata: { rejectionReason: app.rejectionReason },
+            });
+          }
+        }
+
+        // Interview scheduled / rescheduled / cancelled
+        const hadInterview = !!existing.interview_details;
+        const hasInterview = !!app.interviewDetails;
+        if (!hadInterview && hasInterview) {
+          await AuditService.log({
+            actorRole: "company",
+            targetUserId: targetCandidateUserId,
+            companyId: app.companyId,
+            action: "interview_scheduled",
+            entityType: "application",
+            entityId: app.id,
+            newData: app.interviewDetails,
+            metadata: { date: app.interviewDetails?.date, time: app.interviewDetails?.time },
+          });
+        } else if (hadInterview && hasInterview && JSON.stringify(existing.interview_details) !== JSON.stringify(app.interviewDetails)) {
+          await AuditService.log({
+            actorRole: "company",
+            targetUserId: targetCandidateUserId,
+            companyId: app.companyId,
+            action: "interview_rescheduled",
+            entityType: "application",
+            entityId: app.id,
+            oldData: existing.interview_details,
+            newData: app.interviewDetails,
+          });
+        } else if (hadInterview && !hasInterview) {
+          await AuditService.log({
+            actorRole: "company",
+            targetUserId: targetCandidateUserId,
+            companyId: app.companyId,
+            action: "interview_cancelled",
+            entityType: "application",
+            entityId: app.id,
+            oldData: existing.interview_details,
+          });
+        }
+      }
 
       return true;
     } catch (err) {
@@ -155,6 +252,19 @@ export class ApplicationsService {
         console.warn("[ApplicationsService] Failed to log swipe interaction:", error.message);
         return false;
       }
+
+      await AuditService.log({
+        actorRole: "candidate",
+        action: "candidate_swipe_action",
+        entityType: "job",
+        entityId: interaction.jobId,
+        metadata: {
+          candidateId: interaction.candidateId,
+          swipeAction: interaction.action,
+          workMode: interaction.workMode,
+        },
+      });
+
       return true;
     } catch (err) {
       console.warn("[ApplicationsService] Swipe interaction logging failed:", err);

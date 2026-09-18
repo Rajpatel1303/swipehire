@@ -85,6 +85,54 @@ We wish you every success in your ongoing job search and professional endeavors.
 Warm regards,
 {{company_name}} People & Talent Team`,
   },
+  {
+    id: "tmpl_assessment",
+    title: "Technical Assessment & Take-Home",
+    category: "custom",
+    subject: "Technical Assessment: {{job_title}} at {{company_name}}",
+    bodyTemplate: `Hi {{candidate_name}},
+
+Thank you for progressing through the initial interview rounds for the {{job_title}} role at {{company_name}}!
+
+As the next step in our evaluation, we would love for you to complete a brief technical assessment. This exercise is designed to give you a realistic preview of the problems our engineering team solves every day.
+
+Assessment Guidelines:
+• Scope: Hands-on implementation focused on clean architecture and problem-solving
+• Expected Time: 90 - 120 minutes at your own pace
+• Submission Deadline: Within 4 calendar days
+• Environment: You may use your preferred IDE and modern tooling
+
+Please find the problem brief and repository access instructions attached to your SwipeHired dashboard.
+
+If you have any questions or require an extension, please don't hesitate to reach out!
+
+Best of luck,
+{{company_name}} Engineering Hiring Committee`,
+  },
+  {
+    id: "tmpl_offer",
+    title: "Offer & Compensation Discussion",
+    category: "shortlisted",
+    subject: "Official Offer: Welcome to {{company_name}} as {{job_title}}!",
+    bodyTemplate: `Dear {{candidate_name}},
+
+On behalf of the entire leadership and engineering team at {{company_name}}, we are thrilled to extend an official offer of employment for the {{job_title}} position!
+
+Throughout our interview conversations, our team was deeply impressed by your technical depth, execution speed, and collaborative mindset. We are confident you will make a tremendous impact here.
+
+Summary of Terms:
+• Position: {{job_title}}
+• Organization: {{company_name}}
+• Placement Channel: SwipeHired Fast-Track Program
+• Next Step: Review and sign your formal offer letter package
+
+We would love to schedule a brief 15-minute call today to walk through your compensation structure, start date, and onboarding roadmap.
+
+Congratulations once again! We cannot wait to build the future with you.
+
+Warmest regards,
+{{company_name}} Leadership & Talent Team`,
+  },
 ];
 
 export const DEFAULT_WHATSAPP_TEMPLATES: WhatsAppTemplate[] = [

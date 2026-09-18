@@ -31,6 +31,17 @@ export interface ProjectItem {
   link?: string;
 }
 
+export type ProfilePhotoShape = "circle" | "squircle" | "rounded" | "hexagon" | "octagon" | "shield";
+export type ProfilePhotoFrame = "none" | "minimal" | "emerald" | "gradient" | "double" | "neon";
+export type ProfilePhotoFilter = "normal" | "crisp" | "warm" | "noir" | "cyber";
+
+export interface ProfilePhotoSettings {
+  shape?: ProfilePhotoShape;
+  frame?: ProfilePhotoFrame;
+  filter?: ProfilePhotoFilter;
+  zoom?: number; // 0.8 - 2.0
+}
+
 export interface CandidateProfile {
   id: string;
   userId?: string;
@@ -51,6 +62,7 @@ export interface CandidateProfile {
   preferredRole: string;
   bio: string;
   profilePhoto: string;
+  photoSettings?: ProfilePhotoSettings;
   profileStrength: number;
   isCompleted: boolean;
   resumeFilename?: string;
@@ -74,6 +86,56 @@ export interface CandidateProfile {
     preferredWorkModes: string[];
     swipesCount: number;
   };
+  isSuspended?: boolean;
+  githubData?: CandidateGitHubData;
+}
+
+export interface GitHubRepoItem {
+  id: number;
+  name: string;
+  fullName: string;
+  description: string;
+  htmlUrl: string;
+  url?: string;
+  homepage?: string;
+  language: string;
+  starsCount: number;
+  stars?: number;
+  forksCount: number;
+  forks?: number;
+  openIssuesCount?: number;
+  topics?: string[];
+  size?: number;
+  license?: string;
+  updatedAt: string;
+  pushedAt?: string;
+  aiSummary?: string;
+  aiKeyFeatures?: string[];
+  aiTechStack?: string[];
+  aiEngineeringSignal?: string;
+}
+
+export interface CandidateGitHubData {
+  connected: boolean;
+  username: string;
+  avatarUrl?: string;
+  profileUrl?: string;
+  publicReposCount: number;
+  publicRepos?: number;
+  followersCount: number;
+  followers?: number;
+  followingCount: number;
+  totalStars?: number;
+  bio?: string;
+  company?: string;
+  location?: string;
+  topLanguages: string[];
+  languages?: Array<{ name: string; percentage: number }>;
+  topRepos: GitHubRepoItem[];
+  lastActiveAt?: string;
+  recentActivitySummary?: string;
+  lastActiveSummary?: string;
+  connectedAt: string;
 }
 
 export interface CompanyEmailIntegration {
@@ -109,6 +171,8 @@ export interface CompanyProfile {
   isCompleted: boolean;
   emailIntegration: CompanyEmailIntegration;
   isVerified?: boolean;
+  isSuspended?: boolean;
+  photoSettings?: ProfilePhotoSettings;
 }
 
 export type JobStatus = "active" | "draft" | "paused" | "closed";
@@ -142,6 +206,7 @@ export interface Job {
   matchConcerns?: string[];
   isCandidateMatch?: boolean;
   aiSummary?: string;
+  isFeatured?: boolean;
 }
 
 export type ApplicationStatus =
@@ -170,6 +235,7 @@ export interface Application {
   candidateName: string;
   candidateHeadline: string;
   candidatePhoto: string;
+  candidatePhotoSettings?: ProfilePhotoSettings;
   candidateLocation: string;
   candidateSkills: string[];
   candidateExpYears: number;

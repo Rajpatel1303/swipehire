@@ -28,10 +28,12 @@ import { ApplicationStatus, Application, Job } from "../../types";
 import { SendEmailModal } from "./modals/SendEmailModal";
 import { SendWhatsAppModal } from "./modals/SendWhatsAppModal";
 import { ScheduleInterviewModal } from "./modals/ScheduleInterviewModal";
+import { CustomSelect } from "../common/CustomSelect";
 import { InterviewKitModal } from "./modals/InterviewKitModal";
 import { OfferLetterModal } from "./modals/OfferLetterModal";
 import { CompanyJobCandidatesModal } from "./CompanyJobCandidatesModal";
 import { FastActionCountdownBadge } from "../common/FastActionCountdownBadge";
+import { UserAvatar } from "../common/UserAvatar";
 
 export const CompanyPipelineKanban: React.FC = () => {
   const {
@@ -192,21 +194,26 @@ export const CompanyPipelineKanban: React.FC = () => {
             <span>Compare Arena</span>
           </button>
 
-          <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-full border-2 border-slate-200">
-            <Filter className="w-4 h-4 text-slate-400" />
-            <select
-              value={selectedJobId}
-              onChange={(e) => setSelectedJobId(e.target.value)}
-              className="bg-transparent text-xs text-slate-800 font-black uppercase tracking-wider focus:outline-none cursor-pointer"
-            >
-              <option value="all">All Jobs ({companyApplications.length})</option>
-              {companyJobs.map((job) => (
-                <option key={job.id} value={job.id}>
-                  {job.title}
-                </option>
-              ))}
-            </select>
-          </div>
+          <CustomSelect
+            value={selectedJobId}
+            onChange={setSelectedJobId}
+            icon={Filter}
+            align="right"
+            variant="pill"
+            options={[
+              {
+                value: "all",
+                label: "All Jobs",
+                badge: `${companyApplications.length}`,
+              },
+              ...companyJobs.map((job) => ({
+                value: job.id,
+                label: job.title,
+                badge: `${companyApplications.filter((a) => a.jobId === job.id).length}`,
+                description: `${job.department} • ${job.workMode}`,
+              })),
+            ]}
+          />
         </div>
 
         {/* Mobile Stage Selector Tabs */}
@@ -328,13 +335,13 @@ export const CompanyPipelineKanban: React.FC = () => {
                                 className="flex items-center gap-2 cursor-pointer group/cand truncate"
                                 title="Click to view AI Candidate Evaluation"
                               >
-                                <img
-                                  src={
-                                    app.candidatePhoto ||
-                                    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&auto=format&fit=crop&q=80"
-                                  }
+                                <UserAvatar
+                                  src={app.candidatePhoto}
                                   alt={app.candidateName}
-                                  className="w-8 h-8 rounded-xl object-cover ring-1 ring-slate-100 group-hover/cand:ring-sky-500 transition-all shrink-0"
+                                  size="sm"
+                                  settings={app.candidatePhotoSettings}
+                                  fallbackText={app.candidateName}
+                                  className="shrink-0"
                                 />
                                 <div className="truncate">
                                   <h4 className="text-xs font-black uppercase tracking-tight text-slate-900 leading-snug group-hover/cand:text-sky-600 transition-colors truncate">

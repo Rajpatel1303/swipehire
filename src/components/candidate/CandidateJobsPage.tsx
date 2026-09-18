@@ -21,6 +21,7 @@ import { useApp } from "../../context/AppContext";
 import { CandidateJobDetailModal } from "./CandidateJobDetailModal";
 import { Job } from "../../types";
 import { calculateJobMatch } from "../../utils/matchingEngine";
+import { CustomSelect } from "../common/CustomSelect";
 
 export const CandidateJobsPage: React.FC = () => {
   const { jobs, candidate, applications, handleSwipe } = useApp();
@@ -233,44 +234,56 @@ export const CandidateJobsPage: React.FC = () => {
 
           {/* Work mode select */}
           <div className="sm:col-span-3">
-            <select
+            <CustomSelect
               value={selectedWorkMode}
-              onChange={(e) => setSelectedWorkMode(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 focus:bg-white focus:outline-none font-bold"
-            >
-              <option value="all">All Work Modes</option>
-              <option value="Hybrid">Hybrid</option>
-              <option value="Remote">Remote</option>
-              <option value="Onsite">Onsite</option>
-            </select>
+              onChange={setSelectedWorkMode}
+              variant="subtle"
+              size="md"
+              className="w-full"
+              buttonClassName="w-full justify-between"
+              options={[
+                { value: "all", label: "All Work Modes" },
+                { value: "Hybrid", label: "Hybrid" },
+                { value: "Remote", label: "Remote" },
+                { value: "Onsite", label: "Onsite" },
+              ]}
+            />
           </div>
 
           {/* Location select */}
           <div className="sm:col-span-2">
-            <select
+            <CustomSelect
               value={selectedLocation}
-              onChange={(e) => setSelectedLocation(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 focus:bg-white focus:outline-none font-bold"
-            >
-              <option value="all">All Locations</option>
-              <option value="Ahmedabad">Ahmedabad</option>
-              <option value="Bangalore">Bangalore</option>
-              <option value="Pune">Pune</option>
-            </select>
+              onChange={setSelectedLocation}
+              variant="subtle"
+              size="md"
+              className="w-full"
+              buttonClassName="w-full justify-between"
+              options={[
+                { value: "all", label: "All Locations" },
+                { value: "Ahmedabad", label: "Ahmedabad" },
+                { value: "Bangalore", label: "Bangalore" },
+                { value: "Pune", label: "Pune" },
+              ]}
+            />
           </div>
 
           {/* Min salary filter */}
           <div className="sm:col-span-2">
-            <select
+            <CustomSelect
               value={minSalary}
-              onChange={(e) => setMinSalary(Number(e.target.value))}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 focus:bg-white focus:outline-none font-bold"
-            >
-              <option value={0}>Any Salary</option>
-              <option value={8}>Min ₹8 LPA</option>
-              <option value={12}>Min ₹12 LPA</option>
-              <option value={15}>Min ₹15 LPA</option>
-            </select>
+              onChange={(val) => setMinSalary(Number(val))}
+              variant="subtle"
+              size="md"
+              className="w-full"
+              buttonClassName="w-full justify-between"
+              options={[
+                { value: 0, label: "Any Salary" },
+                { value: 8, label: "Min ₹8 LPA" },
+                { value: 12, label: "Min ₹12 LPA" },
+                { value: 15, label: "Min ₹15 LPA" },
+              ]}
+            />
           </div>
         </div>
       </div>

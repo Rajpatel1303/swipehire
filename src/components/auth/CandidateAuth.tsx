@@ -79,8 +79,9 @@ export const CandidateAuth: React.FC<CandidateAuthProps> = ({ initialMode, isSig
   const [resendStatus, setResendStatus] = useState<string | null>(null);
   const [isLoginUnconfirmed, setIsLoginUnconfirmed] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [isGitHubLoading, setIsGitHubLoading] = useState(false);
 
-  const { authSignInWithGoogle } = useApp();
+  const { authSignInWithGoogle, authSignInWithGitHub } = useApp();
 
   const handleGoogleLogin = async () => {
     setError(null);
@@ -95,6 +96,22 @@ export const CandidateAuth: React.FC<CandidateAuthProps> = ({ initialMode, isSig
       setError(err.message || "Failed to initiate Google sign-in.");
     } finally {
       setIsGoogleLoading(false);
+    }
+  };
+
+  const handleGitHubLogin = async () => {
+    setError(null);
+    setSuccessMsg(null);
+    setIsGitHubLoading(true);
+    try {
+      const res = await authSignInWithGitHub("candidate");
+      if (res.error) {
+        setError(res.error);
+      }
+    } catch (err: any) {
+      setError(err.message || "Failed to initiate GitHub sign-in.");
+    } finally {
+      setIsGitHubLoading(false);
     }
   };
 
@@ -324,38 +341,60 @@ export const CandidateAuth: React.FC<CandidateAuthProps> = ({ initialMode, isSig
           </div>
         )}
 
-        {/* Google OAuth Button */}
-        <button
-          id="candidate-google-auth-btn"
-          type="button"
-          disabled={isLoading || isGoogleLoading}
-          onClick={handleGoogleLogin}
-          className="w-full py-3.5 px-4 bg-white hover:bg-slate-50 text-slate-800 border-2 border-slate-200 hover:border-slate-300 rounded-2xl font-bold text-xs shadow-xs transition-all cursor-pointer flex items-center justify-center gap-3 disabled:opacity-60"
-        >
-          {isGoogleLoading ? (
-            <Loader2 className="w-4 h-4 animate-spin text-slate-600" />
-          ) : (
-            <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-              <path
-                fill="#4285F4"
-                d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
-              />
-              <path
-                fill="#34A853"
-                d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
-              />
-              <path
-                fill="#FBBC05"
-                d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
-              />
-              <path
-                fill="#EA4335"
-                d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
-              />
-            </svg>
-          )}
-          <span>{mode === "signup" ? "Sign up with Google" : "Continue with Google"}</span>
-        </button>
+        {/* Social OAuth Buttons */}
+        <div className="space-y-2.5">
+          {/* GitHub OAuth Button (Candidate Only) */}
+          <button
+            id="candidate-github-auth-btn"
+            type="button"
+            disabled={isLoading || isGoogleLoading || isGitHubLoading}
+            onClick={handleGitHubLogin}
+            className="w-full py-3.5 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl font-bold text-xs shadow-md shadow-slate-900/15 transition-all cursor-pointer flex items-center justify-center gap-3 disabled:opacity-60 hover:scale-[1.01]"
+          >
+            {isGitHubLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin text-white" />
+            ) : (
+              <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24">
+                <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+              </svg>
+            )}
+            <span>{mode === "signup" ? "Sign up with GitHub" : "Continue with GitHub"}</span>
+            <span className="text-[10px] uppercase tracking-wider font-black px-2 py-0.5 rounded-full bg-slate-800 text-emerald-400 border border-slate-700">Recommended</span>
+          </button>
+
+          {/* Google OAuth Button */}
+          <button
+            id="candidate-google-auth-btn"
+            type="button"
+            disabled={isLoading || isGoogleLoading || isGitHubLoading}
+            onClick={handleGoogleLogin}
+            className="w-full py-3.5 px-4 bg-white hover:bg-slate-50 text-slate-800 border-2 border-slate-200 hover:border-slate-300 rounded-2xl font-bold text-xs shadow-xs transition-all cursor-pointer flex items-center justify-center gap-3 disabled:opacity-60"
+          >
+            {isGoogleLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin text-slate-600" />
+            ) : (
+              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                <path
+                  fill="#4285F4"
+                  d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+                />
+              </svg>
+            )}
+            <span>{mode === "signup" ? "Sign up with Google" : "Continue with Google"}</span>
+          </button>
+        </div>
 
         {/* Divider */}
         <div className="relative flex items-center justify-center my-1">

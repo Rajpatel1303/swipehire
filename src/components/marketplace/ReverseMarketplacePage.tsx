@@ -42,7 +42,6 @@ export const ReverseMarketplacePage: React.FC = () => {
     toggleCandidateListing,
     respondToTalentBid,
     companyRespondToCounterOffer,
-    simulateCandidateCounterOffer,
     setActiveView,
     setSelectedJobId,
   } = useApp();
@@ -508,12 +507,22 @@ export const ReverseMarketplacePage: React.FC = () => {
                             <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping shrink-0" />
                             <span>Awaiting company response on your counter</span>
                           </div>
-                          <button
-                            onClick={() => setSelectedBidForCounter(bid)}
-                            className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-bold transition-colors cursor-pointer"
-                          >
-                            Edit / Follow Up
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => respondToTalentBid(bid.id, "withdraw_counter")}
+                              className="px-3 py-1.5 bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 rounded-lg text-xs font-bold transition-colors cursor-pointer border border-slate-200 hover:border-rose-200"
+                            >
+                              Withdraw Counter
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedBidForCounter(bid)}
+                              className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                            >
+                              Edit / Follow Up
+                            </button>
+                          </div>
                         </div>
                       ) : (
                         <div className="w-full text-right text-xs text-slate-400 font-medium">
@@ -1011,19 +1020,13 @@ export const ReverseMarketplacePage: React.FC = () => {
                         </div>
                       )}
 
-                      {/* Simulator tester button for pending outgoing bids */}
+                      {/* Real status indicator for pending outgoing bids */}
                       {isPending && (
                         <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                          <span className="text-[10px] text-slate-400 font-bold">Awaiting candidate action</span>
-                          <button
-                            type="button"
-                            onClick={() => simulateCandidateCounterOffer(bid.id)}
-                            title="Test the recruiter reply flow by simulating a candidate counter"
-                            className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-[10px] font-black uppercase tracking-wider cursor-pointer transition-colors flex items-center gap-1 shadow-xs"
-                          >
-                            <Sparkles className="w-3 h-3 text-amber-600" />
-                            <span>Simulate Candidate Counter</span>
-                          </button>
+                          <span className="text-[11px] text-slate-500 font-medium flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                            <span>Awaiting candidate review · Candidate will review, accept, or counter directly from their dashboard.</span>
+                          </span>
                         </div>
                       )}
                     </div>

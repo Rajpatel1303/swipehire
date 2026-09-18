@@ -28,6 +28,7 @@ export const SupabaseService = {
   signUp: AuthService.signUp.bind(AuthService),
   resendConfirmationEmail: AuthService.resendConfirmationEmail.bind(AuthService),
   signInWithGoogle: AuthService.signInWithGoogle.bind(AuthService),
+  signInWithGitHub: AuthService.signInWithGitHub.bind(AuthService),
   fetchUserProfile: AuthService.fetchUserProfile.bind(AuthService),
   signIn: AuthService.signIn.bind(AuthService),
   signOut: AuthService.signOut.bind(AuthService),
@@ -37,14 +38,21 @@ export const SupabaseService = {
   // Candidates
   getCandidates: CandidatesService.getCandidates.bind(CandidatesService),
   saveCandidate: CandidatesService.saveCandidate.bind(CandidatesService),
+  suspendCandidate: CandidatesService.suspendCandidate.bind(CandidatesService),
+  verifyCandidateSkills: CandidatesService.verifyCandidateSkills.bind(CandidatesService),
+  resetLearnedPreferences: CandidatesService.resetLearnedPreferences.bind(CandidatesService),
+  deleteCandidate: CandidatesService.deleteCandidate.bind(CandidatesService),
 
   // Companies
   getCompanies: CompaniesService.getCompanies.bind(CompaniesService),
   saveCompany: CompaniesService.saveCompany.bind(CompaniesService),
+  toggleCompanyVerification: CompaniesService.toggleCompanyVerification.bind(CompaniesService),
+  suspendCompany: CompaniesService.suspendCompany.bind(CompaniesService),
 
   // Jobs
   getJobs: JobsService.getJobs.bind(JobsService),
   saveJob: JobsService.saveJob.bind(JobsService),
+  updateJobStatus: JobsService.updateJobStatus.bind(JobsService),
   deleteJob: JobsService.deleteJob.bind(JobsService),
 
   // Applications
@@ -63,6 +71,9 @@ export const SupabaseService = {
   getNotifications: NotificationsService.getNotifications.bind(NotificationsService),
   saveNotification: NotificationsService.saveNotification.bind(NotificationsService),
   getAdminReports: AdminService.getAdminReports.bind(AdminService),
+  resolveAdminReport: AdminService.resolveAdminReport.bind(AdminService),
+  getPlatformMetrics: AdminService.getPlatformMetrics.bind(AdminService),
+  verifyAdminAccess: AdminService.verifyAdminAccess.bind(AdminService),
   getEmailTemplates: TemplatesService.getEmailTemplates.bind(TemplatesService),
   saveEmailTemplate: TemplatesService.saveEmailTemplate.bind(TemplatesService),
   deleteEmailTemplate: TemplatesService.deleteEmailTemplate.bind(TemplatesService),
@@ -70,4 +81,5 @@ export const SupabaseService = {
 
   // Audit
   logAudit: AuditService.log.bind(AuditService),
+  getAuditLogs: AuditService.getAuditLogs.bind(AuditService),
 };

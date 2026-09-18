@@ -19,6 +19,7 @@ import {
   Zap,
   TrendingUp,
   Sliders,
+  ExternalLink,
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import { Job, CandidateProfile, Application } from "../../types";
@@ -28,6 +29,8 @@ import { SendEmailModal } from "./modals/SendEmailModal";
 import { SendWhatsAppModal } from "./modals/SendWhatsAppModal";
 import { InterviewKitModal } from "./modals/InterviewKitModal";
 import { OfferLetterModal } from "./modals/OfferLetterModal";
+import { CustomSelect } from "../common/CustomSelect";
+import { UserAvatar } from "../common/UserAvatar";
 
 export const CompanyComparisonPage: React.FC = () => {
   const { jobs, applications, allCandidates, triggerCelebration, company } = useApp();
@@ -245,25 +248,24 @@ export const CompanyComparisonPage: React.FC = () => {
         </div>
 
         {/* Job Benchmark Selector */}
-        <div className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-2xl border-2 border-slate-200 shadow-xs">
-          <Briefcase className="w-4 h-4 text-orange-500 shrink-0" />
-          <div className="text-left">
-            <span className="text-[9px] uppercase font-black tracking-wider text-slate-400 block">Target Benchmark</span>
-            <select
-              value={selectedJobId}
-              onChange={(e) => {
-                setSelectedJobId(e.target.value);
-                setAiVerdict(null);
-              }}
-              className="bg-transparent text-xs text-slate-900 font-black uppercase tracking-wider focus:outline-none cursor-pointer"
-            >
-              {companyJobs.map((job) => (
-                <option key={job.id} value={job.id}>
-                  {job.title} ({job.experience} • {job.salary})
-                </option>
-              ))}
-            </select>
-          </div>
+        <div className="flex items-center gap-2">
+          <CustomSelect
+            value={selectedJobId}
+            onChange={(val) => {
+              setSelectedJobId(val);
+              setAiVerdict(null);
+            }}
+            label="Target Benchmark"
+            icon={Briefcase}
+            align="right"
+            variant="card"
+            options={companyJobs.map((job) => ({
+              value: job.id,
+              label: job.title,
+              badge: job.experience,
+              description: `${job.salary} • ${job.workMode}`,
+            }))}
+          />
         </div>
       </div>
 
@@ -295,12 +297,13 @@ export const CompanyComparisonPage: React.FC = () => {
                     : "border-slate-200 hover:border-slate-400 text-slate-700 bg-slate-50"
                 }`}
               >
-                <img
-                  src={cand.profilePhoto || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&auto=format&fit=crop&q=80"}
+                <UserAvatar
+                  src={cand.profilePhoto}
                   alt={cand.fullName}
-                  className={`w-6 h-6 rounded-lg object-cover ring-2 ${
-                    isSelected && color ? "ring-orange-400" : "ring-slate-300"
-                  }`}
+                  size="xs"
+                  settings={cand.photoSettings}
+                  fallbackText={cand.fullName}
+                  className="shrink-0"
                 />
                 <span>{cand.fullName}</span>
                 {isSelected && (
@@ -526,10 +529,13 @@ export const CompanyComparisonPage: React.FC = () => {
                   return (
                     <th key={cand.id} className="p-4 text-left border-l-2 border-slate-200">
                       <div className="flex items-center gap-3">
-                        <img
-                          src={cand.profilePhoto || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&auto=format&fit=crop&q=80"}
+                        <UserAvatar
+                          src={cand.profilePhoto}
                           alt={cand.fullName}
-                          className={`w-10 h-10 rounded-xl object-cover ring-2 ${color.border}`}
+                          size="md"
+                          settings={cand.photoSettings}
+                          fallbackText={cand.fullName}
+                          className="shrink-0"
                         />
                         <div>
                           <div className="flex items-center gap-1.5">
@@ -637,6 +643,65 @@ export const CompanyComparisonPage: React.FC = () => {
                       </div>
                     ) : (
                       <span className="text-slate-400 font-medium">Standard portfolio verified</span>
+                    )}
+                  </td>
+                ))}
+              </tr>
+
+              {/* Row: GitHub Code Proof & Online Recency */}
+              <tr className="hover:bg-slate-50/50">
+                <td className="p-4 font-black uppercase tracking-wider text-slate-700 bg-slate-50/30">
+                  GitHub Code Telemetry
+                </td>
+                {selectedCandidates.map((cand) => (
+                  <td key={cand.id} className="p-4 border-l border-slate-100">
+                    {cand.githubData?.connected ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <a
+                            href={cand.githubData.profileUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 font-bold text-sky-600 hover:text-sky-800 text-xs font-mono"
+                          >
+                            <span>@{cand.githubData.username}</span>
+                            <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                          <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 font-bold">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <span>{cand.githubData.lastActiveSummary || "Active on GitHub"}</span>
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-600">
+                          <span className="px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200">
+                            {cand.githubData.publicRepos ?? (cand.githubData as any).publicReposCount ?? cand.githubData.topRepos?.length ?? 0} repos
+                          </span>
+                          <span className="px-1.5 py-0.5 bg-amber-50 text-amber-800 rounded border border-amber-200">
+                            ★ {cand.githubData.totalStars ?? cand.githubData.topRepos?.reduce((acc: number, r: any) => acc + (r.starsCount ?? r.stars ?? 0), 0) ?? 0}
+                          </span>
+                          <span className="px-1.5 py-0.5 bg-sky-50 text-sky-800 rounded border border-sky-200">
+                            {cand.githubData.followers ?? (cand.githubData as any).followersCount ?? 0} followers
+                          </span>
+                        </div>
+
+                        {cand.githubData.languages && cand.githubData.languages.length > 0 && (
+                          <div className="flex flex-wrap gap-1 pt-0.5">
+                            {cand.githubData.languages.slice(0, 3).map((lang, li) => (
+                              <span
+                                key={li}
+                                className="px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded text-[9px] font-medium"
+                              >
+                                {lang.name} ({lang.percentage}%)
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-slate-400 font-medium text-[11px]">
+                        Pending GitHub verification
+                      </span>
                     )}
                   </td>
                 ))}

@@ -47,6 +47,7 @@ export class JobsService {
           matchReasons: j.match_reasons || [],
           matchConcerns: j.match_concerns || [],
           aiSummary: j.ai_summary || undefined,
+          isFeatured: !!j.is_featured,
           createdAt: j.created_at,
           updatedAt: j.updated_at,
         };
@@ -62,6 +63,12 @@ export class JobsService {
    */
   static async saveJob(job: Job): Promise<boolean> {
     try {
+      const { data: existing } = await supabase
+        .from("jobs")
+        .select("*")
+        .eq("id", job.id)
+        .maybeSingle();
+
       const { error } = await supabase.from("jobs").upsert({
         id: job.id,
         company_id: job.companyId,
@@ -82,6 +89,7 @@ export class JobsService {
         match_reasons: job.matchReasons,
         match_concerns: job.matchConcerns,
         ai_summary: job.aiSummary,
+        is_featured: job.isFeatured || false,
         created_at: job.createdAt || new Date().toISOString(),
         updated_at: new Date().toISOString(),
       });
@@ -92,12 +100,28 @@ export class JobsService {
       }
 
       await AuditService.log({
-        actorId: job.companyId,
         actorRole: "company",
-        action: "save_job_posting",
+        companyId: job.companyId,
+        action: existing ? "job_updated" : "job_created",
         entityType: "job",
         entityId: job.id,
-        metadata: { title: job.title, status: job.status },
+        oldData: existing
+          ? {
+              title: existing.title,
+              department: existing.department,
+              salary: existing.salary,
+              status: existing.status,
+              workMode: existing.work_mode,
+            }
+          : {},
+        newData: {
+          title: job.title,
+          department: job.department,
+          salary: job.salary,
+          status: job.status,
+          workMode: job.workMode,
+        },
+        metadata: { title: job.title, status: job.status, isFeatured: job.isFeatured },
       });
 
       return true;
@@ -108,10 +132,74 @@ export class JobsService {
   }
 
   /**
+   * Update Job Status or Feature Flag (Admin or Company Moderation Action)
+   */
+  static async updateJobStatus(
+    id: string,
+    status: Job["status"],
+    isFeatured?: boolean,
+    actorId = "admin"
+  ): Promise<boolean> {
+    try {
+      const { data: existing } = await supabase
+        .from("jobs")
+        .select("title, status, is_featured, company_id")
+        .eq("id", id)
+        .maybeSingle();
+
+      const payload: any = {
+        status,
+        updated_at: new Date().toISOString(),
+      };
+      if (isFeatured !== undefined) {
+        payload.is_featured = isFeatured;
+      }
+
+      const { error } = await supabase
+        .from("jobs")
+        .update(payload)
+        .eq("id", id);
+
+      if (error) {
+        console.error("[JobsService] Failed to update job status:", error.message);
+        return false;
+      }
+
+      await AuditService.log({
+        actorId,
+        actorRole: actorId === "admin" ? "admin" : "company",
+        companyId: existing?.company_id,
+        action: "job_status_changed",
+        entityType: "job",
+        entityId: id,
+        oldData: { status: existing?.status, isFeatured: existing?.is_featured },
+        newData: { status, isFeatured: isFeatured !== undefined ? isFeatured : existing?.is_featured },
+        metadata: { title: existing?.title, status, isFeatured },
+      });
+
+      return true;
+    } catch (err) {
+      console.error("[JobsService] Error updating job status:", err);
+      return false;
+    }
+  }
+
+  /**
    * Delete job posting by ID
    */
-  static async deleteJob(id: string): Promise<boolean> {
+  static async deleteJob(id: string, actorId = "admin"): Promise<boolean> {
     try {
+      const { data: existing } = await supabase
+        .from("jobs")
+        .select("title, company_id")
+        .eq("id", id)
+        .maybeSingle();
+
+      // 1. Delete dependent relations first to avoid foreign key errors
+      await supabase.from("swipe_interactions").delete().eq("job_id", id);
+      await supabase.from("talent_bids").delete().eq("job_id", id);
+      await supabase.from("applications").delete().eq("job_id", id);
+
       const { error, count } = await supabase
         .from("jobs")
         .delete({ count: "exact" })
@@ -123,16 +211,19 @@ export class JobsService {
       }
 
       if (count === 0) {
-        console.warn(`[JobsService] Delete job '${id}': 0 rows deleted (blocked by RLS or not found)`);
+        console.warn(`[JobsService] Delete job '${id}': 0 rows deleted`);
         return false;
       }
 
       await AuditService.log({
-        actorId: "company_actor",
-        actorRole: "company",
-        action: "delete_job_posting",
+        actorId,
+        actorRole: actorId === "admin" ? "admin" : "company",
+        companyId: existing?.company_id,
+        action: "job_deleted",
         entityType: "job",
         entityId: id,
+        oldData: { id, title: existing?.title },
+        metadata: { title: existing?.title },
       });
 
       return true;

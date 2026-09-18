@@ -304,8 +304,11 @@ export default {
         }
 
         return new Response(
-          JSON.stringify({ success: true, message: `Email queued for ${to}` }),
-          { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
+          JSON.stringify({
+            success: false,
+            error: "SMTP configuration is missing or incomplete. Please connect your custom email provider first.",
+          }),
+          { status: 400, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
         );
       } catch (err: any) {
         return new Response(

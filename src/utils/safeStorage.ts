@@ -92,7 +92,7 @@ export const safeStorage = {
    */
   getJSON<T>(key: string, fallback: T): T {
     const raw = this.getItem(key);
-    return this.parseJson<T>(raw, fallback);
+    return safeStorage.parseJson<T>(raw, fallback);
   },
 
   /**

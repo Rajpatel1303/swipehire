@@ -45,7 +45,7 @@ import {
   Timer,
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
-import { Application, ApplicationStatus, Job, CandidateProfile } from "../../types";
+import { Application, ApplicationStatus, Job, CandidateProfile, GitHubRepoItem } from "../../types";
 import { GeminiService, MatchAnalysisResult } from "../../services/geminiService";
 import { ScheduleInterviewModal } from "./modals/ScheduleInterviewModal";
 import { SendEmailModal } from "./modals/SendEmailModal";
@@ -54,6 +54,9 @@ import { InterviewKitModal } from "./modals/InterviewKitModal";
 import { OfferLetterModal } from "./modals/OfferLetterModal";
 import { CandidateSkillRadarChart } from "./CandidateSkillRadarChart";
 import { FastActionCountdownBadge } from "../common/FastActionCountdownBadge";
+import { GitHubProjectModal } from "../common/GitHubProjectModal";
+import { CustomSelect } from "../common/CustomSelect";
+import { UserAvatar } from "../common/UserAvatar";
 
 const STAGE_CONFIG: Record<
   ApplicationStatus,
@@ -112,7 +115,7 @@ export const CompanyApplicationsPage: React.FC = () => {
 
   // Card Tab expansions
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
-  const [cardTabMap, setCardTabMap] = useState<Record<string, "summary" | "radar" | "skills" | "resume">>({});
+  const [cardTabMap, setCardTabMap] = useState<Record<string, "summary" | "radar" | "skills" | "resume" | "github">>({});
 
   // Live AI Re-evaluation
   const [isEvaluating, setIsEvaluating] = useState<string | null>(null);
@@ -127,6 +130,7 @@ export const CompanyApplicationsPage: React.FC = () => {
   const [selectedWhatsAppApp, setSelectedWhatsAppApp] = useState<Application | null>(null);
   const [selectedInterviewKitApp, setSelectedInterviewKitApp] = useState<Application | null>(null);
   const [selectedOfferApp, setSelectedOfferApp] = useState<Application | null>(null);
+  const [inspectingProject, setInspectingProject] = useState<{ repo: GitHubRepoItem; username: string } | null>(null);
 
   // Compute Skill Breakdown Helper
   const getSkillBreakdown = (app: Application, job: Job | undefined) => {
@@ -456,25 +460,31 @@ export const CompanyApplicationsPage: React.FC = () => {
           {/* Job Filter Dropdown */}
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider shrink-0">Filter By Job:</span>
-            <select
-              id="job-filter-select"
+            <CustomSelect
               value={filterJobId}
-              onChange={(e) => {
-                setFilterJobId(e.target.value);
-                setSelectedJobId(e.target.value === "all" ? null : e.target.value);
+              onChange={(val) => {
+                setFilterJobId(val);
+                setSelectedJobId(val === "all" ? null : val);
               }}
-              className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 w-full sm:w-auto"
-            >
-              <option value="all">All Jobs ({companyApplications.length} Applicants)</option>
-              {companyJobs.map((j) => {
-                const count = companyApplications.filter((a) => a.jobId === j.id).length;
-                return (
-                  <option key={j.id} value={j.id}>
-                    {j.title} ({count} applicants)
-                  </option>
-                );
-              })}
-            </select>
+              variant="card"
+              size="sm"
+              options={[
+                {
+                  value: "all",
+                  label: "All Jobs",
+                  badge: `${companyApplications.length}`,
+                },
+                ...companyJobs.map((j) => {
+                  const count = companyApplications.filter((a) => a.jobId === j.id).length;
+                  return {
+                    value: j.id,
+                    label: j.title,
+                    badge: `${count}`,
+                    description: `${j.department} • ${j.location}`,
+                  };
+                }),
+              ]}
+            />
           </div>
 
           {/* Search Input */}
@@ -710,6 +720,9 @@ export const CompanyApplicationsPage: React.FC = () => {
             const activeCardTab = cardTabMap[app.id] || "summary";
             const stageConfig = STAGE_CONFIG[app.status] || STAGE_CONFIG.applied;
             const skillBreakdown = getSkillBreakdown(app, currentCandidateJob);
+            const candidateData = allCandidates.find(
+              (c) => c.id === app.candidateId || (c.email && c.email.toLowerCase() === app.candidateEmail?.toLowerCase())
+            );
 
             const isLiveAnalyzing = isAnalyzingMap[app.id] || false;
             const liveAnalysis = liveAnalysisMap[app.id];
@@ -779,23 +792,25 @@ export const CompanyApplicationsPage: React.FC = () => {
                       />
 
                       <div className="relative shrink-0">
-                        <img
-                          src={app.candidatePhoto || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80"}
+                        <UserAvatar
+                          src={app.candidatePhoto}
                           alt={app.candidateName}
-                          className={`w-14 h-14 rounded-2xl object-cover ring-2 ring-slate-100 shadow-xs ${
-                            isAppExpired ? "grayscale opacity-60" : ""
-                          }`}
-                        />
-                        <span
-                          className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${
-                            isAppExpired
-                              ? "bg-rose-500"
-                              : app.status === "hired" || app.status === "offer"
-                              ? "bg-emerald-500"
-                              : app.status === "rejected"
-                              ? "bg-rose-500"
-                              : "bg-sky-500"
-                          }`}
+                          size="xl"
+                          settings={app.candidatePhotoSettings || candidateData?.photoSettings}
+                          fallbackText={app.candidateName}
+                          badge={
+                            <span
+                              className={`w-3.5 h-3.5 rounded-full border-2 border-white block ${
+                                isAppExpired
+                                  ? "bg-rose-500"
+                                  : app.status === "hired" || app.status === "offer"
+                                  ? "bg-emerald-500"
+                                  : app.status === "rejected"
+                                  ? "bg-rose-500"
+                                  : "bg-sky-500"
+                              }`}
+                            />
+                          }
                         />
                       </div>
 
@@ -804,6 +819,21 @@ export const CompanyApplicationsPage: React.FC = () => {
                           <h3 className={`text-base sm:text-lg font-black leading-snug ${isAppExpired ? "text-slate-500 line-through" : "text-slate-900"}`}>
                             {app.candidateName}
                           </h3>
+                          {candidateData?.githubData?.connected && (
+                            <a
+                              href={candidateData.githubData.profileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-xs"
+                              title="Verified GitHub Candidate"
+                            >
+                              <svg className="w-2.5 h-2.5 fill-current" viewBox="0 0 24 24">
+                                <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                              </svg>
+                              <span>@{candidateData.githubData.username}</span>
+                              <span className="text-emerald-400 font-bold">✓</span>
+                            </a>
+                          )}
                           <span
                             className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${stageConfig.bg} ${stageConfig.text} ${stageConfig.border}`}
                           >
@@ -977,26 +1007,27 @@ export const CompanyApplicationsPage: React.FC = () => {
                     ) : (
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Change Stage:</span>
-                        <select
+                        <CustomSelect
                           value={app.status}
-                          onChange={(e) => {
-                            const newStatus = e.target.value as ApplicationStatus;
+                          onChange={(newStatus) => {
                             if (newStatus === "rejected") {
                               rejectApplication(app.id);
                             } else {
-                              updateApplicationStatus(app.id, newStatus);
+                              updateApplicationStatus(app.id, newStatus as ApplicationStatus);
                             }
                           }}
-                          className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 cursor-pointer"
-                        >
-                          <option value="applied">New Applied</option>
-                          <option value="screening">Screening</option>
-                          <option value="shortlisted">Shortlisted</option>
-                          <option value="interview">Interview</option>
-                          <option value="offer">Offer Made</option>
-                          <option value="hired">Hired</option>
-                          <option value="rejected">Rejected</option>
-                        </select>
+                          variant="card"
+                          size="sm"
+                          options={[
+                            { value: "applied", label: "New Applied" },
+                            { value: "screening", label: "Screening" },
+                            { value: "shortlisted", label: "Shortlisted" },
+                            { value: "interview", label: "Interview" },
+                            { value: "offer", label: "Offer Made" },
+                            { value: "hired", label: "Hired ✦" },
+                            { value: "rejected", label: "Rejected" },
+                          ]}
+                        />
                       </div>
                     )}
 
@@ -1139,6 +1170,23 @@ export const CompanyApplicationsPage: React.FC = () => {
                       >
                         <FileText className="w-3.5 h-3.5 text-amber-400" />
                         <span>Full Resume & Experience</span>
+                      </button>
+
+                      <button
+                        onClick={() => setCardTabMap((prev) => ({ ...prev, [app.id]: "github" }))}
+                        className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                          activeCardTab === "github"
+                            ? "bg-slate-900 text-white shadow-xs"
+                            : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+                        }`}
+                      >
+                        <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                          <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                        </svg>
+                        <span>GitHub Code Proof</span>
+                        {candidateData?.githubData?.connected && (
+                          <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                        )}
                       </button>
                     </div>
 
@@ -1411,6 +1459,177 @@ export const CompanyApplicationsPage: React.FC = () => {
                         </div>
                       </div>
                     )}
+
+                    {/* Tab 5: GitHub Code Proof & Telemetry */}
+                    {activeCardTab === "github" && (
+                      <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-5">
+                        {candidateData?.githubData?.connected ? (
+                          <>
+                            {/* GitHub Header */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-slate-900 text-white">
+                              <div className="flex items-center gap-3">
+                                <img
+                                  src={candidateData.githubData.avatarUrl || "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"}
+                                  alt={candidateData.githubData.username}
+                                  className="w-12 h-12 rounded-xl border border-slate-700 object-cover"
+                                />
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-sm text-white">
+                                      {candidateData.githubData.name || candidateData.githubData.username}
+                                    </span>
+                                    <a
+                                      href={candidateData.githubData.profileUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-xs text-sky-400 hover:text-sky-300 font-mono inline-flex items-center gap-1"
+                                    >
+                                      @{candidateData.githubData.username}
+                                      <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                  </div>
+                                  {candidateData.githubData.bio && (
+                                    <p className="text-xs text-slate-300 line-clamp-1 mt-0.5">{candidateData.githubData.bio}</p>
+                                  )}
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                                    <span className="text-[11px] text-emerald-300 font-medium">
+                                      {candidateData.githubData.lastActiveSummary || "Active on GitHub"}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <span className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-950 text-emerald-300 border border-emerald-500/40 rounded-full text-xs font-bold">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                                  Verified GitHub Profile
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Telemetry Metrics */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-center">
+                                <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">Public Repos</span>
+                                <span className="text-lg font-black text-slate-900">
+                                  {candidateData.githubData.publicRepos ?? candidateData.githubData.publicReposCount ?? candidateData.githubData.topRepos?.length ?? 0}
+                                </span>
+                              </div>
+                              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-center">
+                                <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">Total Stars</span>
+                                <span className="text-lg font-black text-amber-600">
+                                  ★ {candidateData.githubData.totalStars ?? candidateData.githubData.topRepos?.reduce((acc: number, r: any) => acc + (r.starsCount ?? r.stars ?? 0), 0) ?? 0}
+                                </span>
+                              </div>
+                              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-center">
+                                <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">Followers</span>
+                                <span className="text-lg font-black text-sky-600">
+                                  {candidateData.githubData.followers ?? candidateData.githubData.followersCount ?? 0}
+                                </span>
+                              </div>
+                              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-center">
+                                <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">Online / Recency</span>
+                                <span className="text-xs font-bold text-emerald-700 mt-1 inline-block">Active Contributor</span>
+                              </div>
+                            </div>
+
+                            {/* Top Languages */}
+                            {candidateData.githubData.languages && candidateData.githubData.languages.length > 0 && (
+                              <div className="space-y-1.5">
+                                <h5 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                                  Top Languages by Codebase Volume
+                                </h5>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {candidateData.githubData.languages.map((lang, idx) => (
+                                    <span
+                                      key={idx}
+                                      className="px-2.5 py-1 bg-slate-100 text-slate-800 border border-slate-200 rounded-lg text-xs font-semibold"
+                                    >
+                                      {lang.name} <span className="text-[10px] text-slate-500">({lang.percentage}%)</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Featured Repositories with Project Intelligence */}
+                            {candidateData.githubData.topRepos && candidateData.githubData.topRepos.length > 0 && (
+                              <div className="space-y-2.5 pt-2 border-t border-slate-100">
+                                <div className="flex items-center justify-between">
+                                  <h5 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                                    <Sparkles className="w-3.5 h-3.5 text-sky-600" />
+                                    <span>Featured GitHub Repositories & AI Project Breakdown ({candidateData.githubData.topRepos.length})</span>
+                                  </h5>
+                                  <span className="text-[10px] text-slate-400 font-medium">Click any project for deep-dive & README</span>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                  {candidateData.githubData.topRepos.map((repo, idx) => (
+                                    <div
+                                      key={idx}
+                                      onClick={() => setInspectingProject({ repo, username: candidateData.githubData?.username || "" })}
+                                      className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-sky-500 hover:shadow-md transition-all text-xs group cursor-pointer flex flex-col justify-between gap-3 relative"
+                                    >
+                                      <div className="space-y-1.5">
+                                        <div className="flex items-start justify-between gap-2">
+                                          <div className="flex items-center gap-1.5 min-w-0">
+                                            <span className="font-black text-slate-900 group-hover:text-sky-600 transition-colors truncate text-sm">
+                                              {repo.name}
+                                            </span>
+                                            {repo.homepage && (
+                                              <a
+                                                href={repo.homepage}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0 hover:bg-emerald-200 transition-colors inline-flex items-center gap-0.5"
+                                                title="Open Live Deployment"
+                                              >
+                                                <span>Live</span>
+                                                <ExternalLink className="w-2 h-2" />
+                                              </a>
+                                            )}
+                                          </div>
+                                          <span className="text-[11px] font-bold text-amber-600 shrink-0 flex items-center gap-0.5 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200/60">
+                                            ★ {repo.starsCount ?? repo.stars ?? 0}
+                                          </span>
+                                        </div>
+
+                                        <p className="text-slate-600 line-clamp-2 text-xs leading-relaxed">
+                                          {repo.description || "Public repository on GitHub"}
+                                        </p>
+                                      </div>
+
+                                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                                        <div className="flex items-center gap-2 text-slate-500 font-medium">
+                                          <span className="inline-flex items-center gap-1 text-slate-700 font-bold">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+                                            {repo.language || "Code"}
+                                          </span>
+                                          {(repo.forksCount ?? repo.forks ?? 0) > 0 && (
+                                            <span>• {repo.forksCount ?? repo.forks} forks</span>
+                                          )}
+                                        </div>
+
+                                        <div className="flex items-center gap-1 text-sky-600 font-bold group-hover:underline">
+                                          <span>Explain Project</span>
+                                          <Sparkles className="w-3 h-3 text-sky-500" />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <div className="p-6 text-center rounded-xl bg-slate-50 border border-dashed border-slate-200 text-xs text-slate-500">
+                            Candidate has not verified GitHub telemetry yet. All candidates are required to connect their GitHub before completing their profile.
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1465,6 +1684,15 @@ export const CompanyApplicationsPage: React.FC = () => {
           application={selectedOfferApp}
           job={jobs.find((j) => j.id === selectedOfferApp.jobId) || jobs[0]}
           candidateProfile={allCandidates.find((c) => c.id === selectedOfferApp.candidateId)}
+        />
+      )}
+
+      {inspectingProject && (
+        <GitHubProjectModal
+          isOpen={true}
+          onClose={() => setInspectingProject(null)}
+          repo={inspectingProject.repo}
+          username={inspectingProject.username}
         />
       )}
     </div>

@@ -10,15 +10,20 @@ interface CounterBidModalProps {
 
 export const CounterBidModal: React.FC<CounterBidModalProps> = ({ bid, onClose, onConfirm }) => {
   const isReplyingToCompany = Boolean(bid.companyCounterDetails);
-  const defaultSalary = bid.companyCounterDetails?.revisedSalary || bid.counterOfferDetails?.proposedSalary || bid.salaryOffer;
-  const defaultWorkMode = bid.companyCounterDetails?.revisedWorkMode || bid.counterOfferDetails?.proposedWorkMode || bid.workMode;
+  const defaultSalary =
+    bid.companyCounterDetails?.revisedSalary ||
+    bid.counterOfferDetails?.proposedSalary ||
+    "";
+  const defaultWorkMode =
+    bid.companyCounterDetails?.revisedWorkMode ||
+    bid.counterOfferDetails?.proposedWorkMode ||
+    bid.workMode ||
+    "Remote";
 
   const [proposedSalary, setProposedSalary] = useState(defaultSalary);
   const [proposedWorkMode, setProposedWorkMode] = useState<string>(defaultWorkMode);
   const [note, setNote] = useState(
-    isReplyingToCompany
-      ? `Thank you for reviewing my counter! Here is my response regarding the revised compensation/terms.`
-      : `Thank you for the upfront offer! Given my recent work on high-throughput systems, I would be excited to move forward with this adjusted compensation/work mode.`
+    bid.counterOfferDetails?.note || ""
   );
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -124,6 +129,7 @@ export const CounterBidModal: React.FC<CounterBidModalProps> = ({ bid, onClose, 
               rows={3}
               value={note}
               onChange={(e) => setNote(e.target.value)}
+              placeholder="Explain your counter-proposal (e.g. your market rate expectation, relevant technical background, or preferred compensation terms)..."
               required
               className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-medium text-slate-800 text-xs focus:outline-none focus:border-amber-500"
             />

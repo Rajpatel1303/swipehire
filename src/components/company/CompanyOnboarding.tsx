@@ -9,8 +9,13 @@ import {
   CheckCircle2,
   ArrowRight,
   Camera,
+  Sliders,
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
+import { CustomSelect } from "../common/CustomSelect";
+import { UserAvatar } from "../common/UserAvatar";
+import { ProfilePhotoModal } from "../common/ProfilePhotoModal";
+import { ProfilePhotoSettings } from "../../types";
 
 export const CompanyOnboarding: React.FC = () => {
   const { company, updateCompany, setActiveView, triggerCelebration } = useApp();
@@ -26,6 +31,10 @@ export const CompanyOnboarding: React.FC = () => {
     company.logo ||
       "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200&auto=format&fit=crop&q=80"
   );
+  const [photoSettings, setPhotoSettings] = useState<ProfilePhotoSettings>(
+    company.photoSettings || { shape: "squircle", frame: "minimal", filter: "normal", zoom: 1.0 }
+  );
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [benefits, setBenefits] = useState<string[]>(
     company.benefits || []
   );
@@ -49,6 +58,7 @@ export const CompanyOnboarding: React.FC = () => {
         about,
         culture,
         logo,
+        photoSettings,
         benefits,
         isCompleted: true,
       });
@@ -78,30 +88,62 @@ export const CompanyOnboarding: React.FC = () => {
       </div>
 
       <form onSubmit={handleSubmit} className="bg-white rounded-3xl border border-slate-200/90 shadow-xs p-6 sm:p-8 space-y-6">
-        {/* Logo Selection */}
+        {/* Logo Selection & Shape Customizer */}
         <div className="flex flex-col sm:flex-row items-center gap-6 pb-6 border-b border-slate-100">
-          <div className="relative">
-            <img
+          <div className="relative group cursor-pointer" onClick={() => setIsPhotoModalOpen(true)}>
+            <UserAvatar
               src={logo}
-              alt="logo"
-              className="w-20 h-20 rounded-2xl object-cover ring-4 ring-sky-50 shadow-md"
+              alt={companyName || "Company Logo"}
+              size="3xl"
+              settings={photoSettings}
+              fallbackText={companyName || "Company"}
+              className="transition-transform group-hover:scale-105"
             />
             <button
               type="button"
-              onClick={() => {
-                const next = (logoPresets.indexOf(logo) + 1) % logoPresets.length;
-                setLogo(logoPresets[next]);
+              id="change-company-logo-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsPhotoModalOpen(true);
               }}
-              className="absolute -bottom-2 -right-2 p-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl shadow-xs transition-colors cursor-pointer"
-              title="Change logo"
+              className="absolute -bottom-1 -right-1 p-2 bg-slate-900 hover:bg-sky-600 text-white rounded-xl shadow-md transition-colors cursor-pointer"
+              title="Customize logo, shape & frames"
             >
-              <Camera className="w-3.5 h-3.5" />
+              <Camera className="w-4 h-4" />
             </button>
           </div>
-          <div className="text-center sm:text-left space-y-1">
-            <h3 className="text-sm font-bold text-slate-900">Company Logo</h3>
-            <p className="text-xs text-slate-500">Pick from company presets or upload:</p>
-            <div className="flex items-center gap-2 pt-1">
+
+          <div className="text-center sm:text-left space-y-2 flex-1">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-black text-slate-900 flex items-center justify-center sm:justify-start gap-2">
+                  <span>Company Logo & Shape Styling</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-800 uppercase tracking-wide">
+                    {photoSettings?.shape || "Squircle"}
+                  </span>
+                  {photoSettings?.frame && photoSettings.frame !== "none" && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 uppercase tracking-wide">
+                      {photoSettings.frame} Frame
+                    </span>
+                  )}
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Upload your brand logo or capture webcam, adjust custom shape, frame border, and zoom visible to candidates across all job postings.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsPhotoModalOpen(true)}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer shrink-0"
+              >
+                <Sliders className="w-3.5 h-3.5 text-sky-400" />
+                <span>Customize Logo</span>
+              </button>
+            </div>
+
+            <div className="flex items-center justify-center sm:justify-start gap-2 pt-1">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Quick Presets:</span>
               {logoPresets.map((preset, idx) => (
                 <img
                   key={idx}
@@ -161,17 +203,18 @@ export const CompanyOnboarding: React.FC = () => {
 
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1.5">Company Size</label>
-            <select
-              id="company-setup-size"
+            <CustomSelect
               value={size}
-              onChange={(e) => setSize(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 font-medium"
-            >
-              <option value="1-10 Employees">1-10 Employees (Early Startup)</option>
-              <option value="11-50 Employees">11-50 Employees (Growth)</option>
-              <option value="50-200 Employees">50-200 Employees (Scale-up)</option>
-              <option value="200-1000 Employees">200-1000 Employees (Enterprise)</option>
-            </select>
+              onChange={(val) => setSize(val)}
+              variant="card"
+              size="md"
+              options={[
+                { value: "1-10 Employees", label: "1-10 Employees", sublabel: "Early Startup" },
+                { value: "11-50 Employees", label: "11-50 Employees", sublabel: "Growth Stage" },
+                { value: "50-200 Employees", label: "50-200 Employees", sublabel: "Scale-up" },
+                { value: "200-1000 Employees", label: "200-1000 Employees", sublabel: "Enterprise" },
+              ]}
+            />
           </div>
 
           <div className="sm:col-span-2">
@@ -222,6 +265,25 @@ export const CompanyOnboarding: React.FC = () => {
           </button>
         </div>
       </form>
+
+      {/* Company Logo Customizer Modal */}
+      <ProfilePhotoModal
+        isOpen={isPhotoModalOpen}
+        onClose={() => setIsPhotoModalOpen(false)}
+        currentPhoto={logo}
+        currentSettings={photoSettings}
+        candidateName={companyName || "Company"}
+        title="Customize Company Logo"
+        subtitle="Upload company logo, select custom shape, frame border, and lighting filters visible to candidates."
+        onSave={(newPhoto, newSettings) => {
+          setLogo(newPhoto);
+          setPhotoSettings(newSettings);
+          updateCompany({
+            logo: newPhoto,
+            photoSettings: newSettings,
+          });
+        }}
+      />
     </div>
   );
 };

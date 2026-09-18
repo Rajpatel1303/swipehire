@@ -7,6 +7,7 @@ import React from "react";
 import { AppProvider, useApp } from "./context/AppContext";
 import { Navbar } from "./components/layout/Navbar";
 import { Footer } from "./components/layout/Footer";
+import { SupportBanner } from "./components/common/SupportBanner";
 
 // Landing & Auth
 import { LandingPage } from "./components/landing/LandingPage";
@@ -37,9 +38,6 @@ import { CompanyAddJobModal } from "./components/company/CompanyAddJobModal";
 // Reverse Hiring Marketplace (Blind Talent Bidding)
 import { ReverseMarketplacePage } from "./components/marketplace/ReverseMarketplacePage";
 
-// Admin View
-import { AdminPortal } from "./components/admin/AdminPortal";
-
 const MainContent: React.FC = () => {
   const {
     authUser,
@@ -51,10 +49,12 @@ const MainContent: React.FC = () => {
     company,
     isAddJobModalOpen,
     setIsAddJobModalOpen,
+    supportSession,
+    exitSupportMode,
   } = useApp();
 
   // 1. Loading Screen Gate: Never flash dashboard or wrong role while session is hydrating
-  if (isAuthLoading) {
+  if (isAuthLoading && !supportSession) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 selection:bg-orange-500 selection:text-white">
         <div className="flex flex-col items-center gap-5 animate-in fade-in zoom-in-95 duration-200">
@@ -76,8 +76,8 @@ const MainContent: React.FC = () => {
   }
 
   const renderCurrentView = () => {
-    // 2. Unauthenticated Guard: Protected views require an active authenticated session
-    if (!role || authStatus === "UNAUTHENTICATED") {
+    // 2. Unauthenticated Guard: Protected views require an active authenticated session unless in Support Mode
+    if ((!role || authStatus === "UNAUTHENTICATED") && !supportSession) {
       const publicViews = [
         "landing",
         "auth-select",
@@ -92,7 +92,7 @@ const MainContent: React.FC = () => {
     }
 
     // 3. Strict Company Guard: Company users should never see candidate views
-    if (authUser && role === "company") {
+    if ((authUser || supportSession) && role === "company") {
       if (
         activeView === "candidate-onboarding" ||
         activeView === "candidate-review" ||
@@ -109,7 +109,7 @@ const MainContent: React.FC = () => {
     }
 
     // 4. Strict Candidate Guard: Candidate users should never see company views
-    if (authUser && role === "candidate") {
+    if ((authUser || supportSession) && role === "candidate") {
       if (
         activeView === "company-onboarding" ||
         activeView === "company-cockpit" ||
@@ -124,12 +124,13 @@ const MainContent: React.FC = () => {
         activeView === "company-signup"
       ) {
         if (!candidate.isCompleted) return <CandidateOnboarding />;
-        if (!candidate.commissionAgreementSigned) return <CandidateAgreementPage />;
+        if (!candidate.commissionAgreementSigned && !supportSession) return <CandidateAgreementPage />;
         return <CareerRadarDashboard />;
       }
 
-      // Mandatory gate for candidate dashboard views: must sign 10% commission agreement
+      // Mandatory gate for candidate dashboard views: must sign 10% commission agreement (bypassed for support review if admin)
       if (
+        !supportSession &&
         !candidate.commissionAgreementSigned &&
         (activeView === "candidate-radar" ||
           activeView === "candidate-jobs" ||
@@ -196,14 +197,6 @@ const MainContent: React.FC = () => {
       case "blind-marketplace":
         return <ReverseMarketplacePage />;
 
-      // Admin Console
-      case "admin-overview":
-      case "admin-users":
-      case "admin-companies":
-      case "admin-jobs":
-      case "admin-reports":
-        return <AdminPortal />;
-
       default:
         return <LandingPage />;
     }
@@ -211,6 +204,9 @@ const MainContent: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50/50 flex flex-col font-sans text-slate-900 antialiased selection:bg-emerald-100 selection:text-emerald-900 w-full overflow-x-hidden">
+      {supportSession && (
+        <SupportBanner session={supportSession} onExit={exitSupportMode} />
+      )}
       <Navbar />
       <main className="flex-1 w-full overflow-x-hidden">{renderCurrentView()}</main>
       <Footer />

@@ -22,6 +22,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { useApp, ActiveView } from "../../context/AppContext";
+import { UserAvatar } from "../common/UserAvatar";
 
 export const Navbar: React.FC = () => {
   const {
@@ -85,15 +86,6 @@ export const Navbar: React.FC = () => {
         { id: "company-email-connect", label: "Email & WhatsApp", icon: Mail },
       ];
     }
-    if (role === "admin") {
-      return [
-        { id: "admin-overview", label: "Overview", icon: Layers },
-        { id: "blind-marketplace", label: "Talent Arena", icon: Sparkles },
-        { id: "admin-users", label: "Candidates", icon: User },
-        { id: "admin-companies", label: "Companies", icon: Building2 },
-        { id: "admin-jobs", label: "Moderation", icon: Shield },
-      ];
-    }
     return [];
   };
 
@@ -110,7 +102,6 @@ export const Navbar: React.FC = () => {
                 onClick={() => {
                   if (authUser && role === "candidate") setActiveView("candidate-radar");
                   else if (authUser && role === "company") setActiveView("company-cockpit");
-                  else if (authUser && role === "admin") setActiveView("admin-overview");
                   else setActiveView("landing");
                 }}
                 className="flex items-center gap-2.5 cursor-pointer focus:outline-none"
@@ -254,16 +245,18 @@ export const Navbar: React.FC = () => {
                   onClick={() => setShowProfileMenu(!showProfileMenu)}
                   className="flex items-center gap-2 p-1.5 sm:px-2.5 sm:py-1.5 text-left bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 transition-colors cursor-pointer focus:outline-none"
                 >
-                  <img
+                  <UserAvatar
                     src={
                       role === "candidate"
-                        ? candidate.profilePhoto || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80"
+                        ? candidate.profilePhoto
                         : role === "company"
-                        ? company.logo || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=80"
-                        : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80"
+                        ? company.logo
+                        : undefined
                     }
-                    alt="avatar"
-                    className="w-7 h-7 sm:w-7.5 sm:h-7.5 rounded-lg object-cover ring-1 ring-slate-200 shrink-0"
+                    settings={role === "candidate" ? candidate.photoSettings : company.photoSettings}
+                    size="sm"
+                    fallbackText={role === "candidate" ? candidate.fullName : role === "company" ? company.companyName : "Admin"}
+                    className="shrink-0"
                   />
                   <span className="hidden sm:inline-block text-xs font-bold text-slate-800 truncate max-w-[100px] lg:max-w-[130px]">
                     {role === "candidate" ? candidate.fullName.split(" ")[0] : role === "company" ? company.companyName : "Admin"}

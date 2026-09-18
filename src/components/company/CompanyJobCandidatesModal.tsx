@@ -30,7 +30,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
-import { Job, Application, ApplicationStatus, CandidateProfile } from "../../types";
+import { Job, Application, ApplicationStatus, CandidateProfile, GitHubRepoItem } from "../../types";
 import { GeminiService, MatchAnalysisResult } from "../../services/geminiService";
 import { ScheduleInterviewModal } from "./modals/ScheduleInterviewModal";
 import { SendEmailModal } from "./modals/SendEmailModal";
@@ -41,6 +41,9 @@ import { CandidateSkillRadarChart } from "./CandidateSkillRadarChart";
 import { CompanyEditJobModal } from "./CompanyEditJobModal";
 import { Target, Radar, Pencil, Scale, BrainCircuit } from "lucide-react";
 import { FastActionCountdownBadge } from "../common/FastActionCountdownBadge";
+import { GitHubProjectModal } from "../common/GitHubProjectModal";
+import { CustomSelect } from "../common/CustomSelect";
+import { UserAvatar } from "../common/UserAvatar";
 
 interface CompanyJobCandidatesModalProps {
   isOpen: boolean;
@@ -72,7 +75,7 @@ export const CompanyJobCandidatesModal: React.FC<CompanyJobCandidatesModalProps>
   const [filterStage, setFilterStage] = useState<"all" | "high-match" | ApplicationStatus>("all");
   const [sortBy, setSortBy] = useState<"score" | "experience" | "recent">("score");
   const [expandedCandidateId, setExpandedCandidateId] = useState<string | null>(null);
-  const [cardTabMap, setCardTabMap] = useState<Record<string, "summary" | "radar" | "skills" | "resume">>({});
+  const [cardTabMap, setCardTabMap] = useState<Record<string, "summary" | "radar" | "skills" | "resume" | "github">>({});
 
   // Live AI Re-evaluation state
   const [customPromptMap, setCustomPromptMap] = useState<Record<string, string>>({});
@@ -86,6 +89,7 @@ export const CompanyJobCandidatesModal: React.FC<CompanyJobCandidatesModalProps>
   const [selectedWhatsAppApp, setSelectedWhatsAppApp] = useState<Application | null>(null);
   const [selectedInterviewKitApp, setSelectedInterviewKitApp] = useState<Application | null>(null);
   const [selectedOfferApp, setSelectedOfferApp] = useState<Application | null>(null);
+  const [inspectingProject, setInspectingProject] = useState<{ repo: GitHubRepoItem; username: string } | null>(null);
 
   // Guard against inspecting competitor jobs
   if (!isOpen || !job || (company.id && job.companyId && job.companyId !== company.id)) return null;
@@ -364,15 +368,18 @@ export const CompanyJobCandidatesModal: React.FC<CompanyJobCandidatesModalProps>
 
               {/* Sort Dropdown */}
               <div className="flex items-center gap-1 shrink-0">
-                <select
+                <CustomSelect
                   value={sortBy}
-                  onChange={(e: any) => setSortBy(e.target.value)}
-                  className="bg-white border border-slate-200 text-[10px] sm:text-xs font-black text-slate-800 uppercase tracking-wider px-2 py-1 rounded-lg focus:outline-none cursor-pointer"
-                >
-                  <option value="score">Highest Match</option>
-                  <option value="experience">Experience</option>
-                  <option value="recent">Most Recent</option>
-                </select>
+                  onChange={(val) => setSortBy(val as any)}
+                  variant="card"
+                  size="sm"
+                  align="right"
+                  options={[
+                    { value: "score", label: "Highest Match" },
+                    { value: "experience", label: "Experience" },
+                    { value: "recent", label: "Most Recent" },
+                  ]}
+                />
               </div>
             </div>
           </div>
@@ -413,6 +420,9 @@ export const CompanyJobCandidatesModal: React.FC<CompanyJobCandidatesModalProps>
               {filteredCandidates.map((app) => {
                 const activeTab = cardTabMap[app.id] || "summary";
                 const { matchedSkills, missingSkills } = getSkillBreakdown(app);
+                const candidateData = allCandidates.find(
+                  (c) => c.id === app.candidateId || (c.email && c.email.toLowerCase() === app.candidateEmail?.toLowerCase())
+                );
                 const liveEval = liveAnalysisMap[app.id];
                 const activeScore = liveEval?.matchScore ?? app.matchScore ?? 90;
                 const activeVerdict =
@@ -453,19 +463,34 @@ export const CompanyJobCandidatesModal: React.FC<CompanyJobCandidatesModalProps>
                     {/* 1. CANDIDATE HEADER ROW */}
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-start gap-2.5 sm:gap-3.5 min-w-0 flex-1">
-                        <img
-                          src={
-                            app.candidatePhoto ||
-                            "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80"
-                          }
+                        <UserAvatar
+                          src={app.candidatePhoto}
                           alt={app.candidateName}
-                          className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl object-cover ring-2 ring-slate-900 shrink-0 shadow-sm"
+                          size="xl"
+                          settings={app.candidatePhotoSettings || candidateData?.photoSettings}
+                          fallbackText={app.candidateName}
+                          className="shrink-0"
                         />
                         <div className="space-y-0.5 min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-1.5">
                             <h3 className="text-sm sm:text-base font-black text-slate-900 uppercase tracking-tight truncate">
                               {app.candidateName}
                             </h3>
+                            {candidateData?.githubData?.connected && (
+                              <a
+                                href={candidateData.githubData.profileUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-2xs"
+                                title="Verified GitHub Candidate"
+                              >
+                                <svg className="w-2.5 h-2.5 fill-current" viewBox="0 0 24 24">
+                                  <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                                </svg>
+                                <span>@{candidateData.githubData.username}</span>
+                                <span className="text-emerald-400 font-bold">✓</span>
+                              </a>
+                            )}
                             <span
                               className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
                                 app.status === "hired"
@@ -598,6 +623,25 @@ export const CompanyJobCandidatesModal: React.FC<CompanyJobCandidatesModalProps>
                       >
                         <Briefcase className="w-3 h-3" />
                         <span>Full Resume</span>
+                      </button>
+
+                      <button
+                        onClick={() =>
+                          setCardTabMap((prev) => ({ ...prev, [app.id]: "github" }))
+                        }
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors cursor-pointer shrink-0 flex items-center gap-1 ${
+                          activeTab === "github"
+                            ? "bg-slate-900 text-white"
+                            : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                        }`}
+                      >
+                        <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24">
+                          <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                        </svg>
+                        <span>GitHub ({candidateData?.githubData?.publicRepos ?? 0})</span>
+                        {candidateData?.githubData?.connected && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                        )}
                       </button>
                     </div>
 
@@ -878,6 +922,149 @@ export const CompanyJobCandidatesModal: React.FC<CompanyJobCandidatesModalProps>
                       </div>
                     )}
 
+                    {/* TAB CONTENT: GITHUB TELEMETRY & CODE PROOF */}
+                    {activeTab === "github" && (
+                      <div className="p-3 sm:p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3.5 text-xs">
+                        {candidateData?.githubData?.connected ? (
+                          <>
+                            {/* Profile Bar */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-slate-900 text-white">
+                              <div className="flex items-center gap-2.5">
+                                <img
+                                  src={candidateData.githubData.avatarUrl || "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"}
+                                  alt={candidateData.githubData.username}
+                                  className="w-10 h-10 rounded-xl border border-slate-700 object-cover"
+                                />
+                                <div>
+                                  <div className="flex items-center gap-1.5">
+                                    <strong className="text-xs text-white">{candidateData.githubData.name || candidateData.githubData.username}</strong>
+                                    <a
+                                      href={candidateData.githubData.profileUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-[11px] text-sky-400 hover:text-sky-300 font-mono inline-flex items-center gap-0.5"
+                                    >
+                                      @{candidateData.githubData.username}
+                                      <ExternalLink className="w-2.5 h-2.5" />
+                                    </a>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 mt-0.5">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                    <span className="text-[10px] text-emerald-300 font-medium">
+                                      {candidateData.githubData.lastActiveSummary || "Active on GitHub"}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-950 text-emerald-300 border border-emerald-500/40 rounded-full text-[10px] font-bold self-start sm:self-auto">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                Verified Profile
+                              </span>
+                            </div>
+
+                            {/* Stat Chips */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+                              <div className="p-2 rounded-lg bg-white border border-slate-200">
+                                <span className="text-[9px] text-slate-400 uppercase font-black tracking-wider block">Public Repos</span>
+                                <span className="text-sm font-black text-slate-900">
+                                  {candidateData.githubData.publicRepos ?? (candidateData.githubData as any).publicReposCount ?? candidateData.githubData.topRepos?.length ?? 0}
+                                </span>
+                              </div>
+                              <div className="p-2 rounded-lg bg-white border border-slate-200">
+                                <span className="text-[9px] text-slate-400 uppercase font-black tracking-wider block">Total Stars</span>
+                                <span className="text-sm font-black text-amber-600">
+                                  ★ {candidateData.githubData.totalStars ?? candidateData.githubData.topRepos?.reduce((acc: number, r: any) => acc + (r.starsCount ?? r.stars ?? 0), 0) ?? 0}
+                                </span>
+                              </div>
+                              <div className="p-2 rounded-lg bg-white border border-slate-200">
+                                <span className="text-[9px] text-slate-400 uppercase font-black tracking-wider block">Followers</span>
+                                <span className="text-sm font-black text-sky-600">
+                                  {candidateData.githubData.followers ?? (candidateData.githubData as any).followersCount ?? 0}
+                                </span>
+                              </div>
+                              <div className="p-2 rounded-lg bg-white border border-slate-200">
+                                <span className="text-[9px] text-slate-400 uppercase font-black tracking-wider block">Activity</span>
+                                <span className="text-[11px] font-bold text-emerald-700 block mt-0.5">Active</span>
+                              </div>
+                            </div>
+
+                            {/* Languages */}
+                            {candidateData.githubData.languages && candidateData.githubData.languages.length > 0 && (
+                              <div className="space-y-1">
+                                <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
+                                  Top Codebase Languages
+                                </span>
+                                <div className="flex flex-wrap gap-1">
+                                  {candidateData.githubData.languages.map((l, i) => (
+                                    <span key={i} className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[10px] font-bold text-slate-700">
+                                      {l.name} <span className="text-slate-400 font-normal">({l.percentage}%)</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Featured Repos */}
+                            {candidateData.githubData.topRepos && candidateData.githubData.topRepos.length > 0 && (
+                              <div className="space-y-1.5 pt-1 border-t border-slate-200">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                                    <Sparkles className="w-3 h-3 text-sky-500" />
+                                    <span>Top GitHub Repositories ({candidateData.githubData.topRepos.length})</span>
+                                  </span>
+                                  <span className="text-[9px] text-slate-400">Click for AI deep-dive</span>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  {candidateData.githubData.topRepos.map((r, i) => (
+                                    <div
+                                      key={i}
+                                      onClick={() => setInspectingProject({ repo: r, username: candidateData.githubData?.username || "" })}
+                                      className="p-2.5 bg-white rounded-lg border border-slate-200 hover:border-sky-500 hover:shadow-xs block transition-all group cursor-pointer"
+                                    >
+                                      <div className="flex items-center justify-between gap-1">
+                                        <div className="flex items-center gap-1 min-w-0">
+                                          <span className="font-bold text-[11px] text-slate-900 group-hover:text-sky-600 truncate">{r.name}</span>
+                                          {r.homepage && (
+                                            <a
+                                              href={r.homepage}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              onClick={(e) => e.stopPropagation()}
+                                              className="px-1 py-0.2 rounded text-[8px] font-black uppercase bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0 hover:bg-emerald-200 inline-flex items-center gap-0.5"
+                                              title="Open Live App"
+                                            >
+                                              <span>Live</span>
+                                              <ExternalLink className="w-2 h-2" />
+                                            </a>
+                                          )}
+                                        </div>
+                                        <span className="text-[10px] text-amber-600 shrink-0 font-bold">★ {r.starsCount ?? r.stars ?? 0}</span>
+                                      </div>
+                                      <p className="text-[10px] text-slate-500 line-clamp-1 mt-0.5">
+                                        {r.description || "Public repository on GitHub"}
+                                      </p>
+                                      <div className="flex items-center justify-between mt-1.5 pt-1 border-t border-slate-100 text-[9px] text-slate-400 font-medium">
+                                        <span>{r.language || "Code"}</span>
+                                        <span className="text-sky-600 font-bold group-hover:underline flex items-center gap-0.5">
+                                          <span>Explain</span>
+                                          <Sparkles className="w-2.5 h-2.5 text-sky-500" />
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <div className="p-4 bg-white rounded-lg border border-dashed border-slate-200 text-center text-[11px] text-slate-500">
+                            Candidate GitHub telemetry not connected.
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* 6. RECRUITER ACTION TOOLBAR (MOBILE OPTIMIZED) */}
                     <div className="pt-2.5 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
                       {/* Left: Quick Communication */}
@@ -959,19 +1146,21 @@ export const CompanyJobCandidatesModal: React.FC<CompanyJobCandidatesModalProps>
                         </button>
 
                         {/* Stage Dropdown Selector */}
-                        <select
+                        <CustomSelect
                           value={app.status}
-                          onChange={(e) => handleStatusChange(app.id, e.target.value as ApplicationStatus)}
-                          className="px-2 py-1 bg-slate-900 text-white rounded-lg font-black text-[10px] uppercase tracking-wider focus:outline-none cursor-pointer"
-                        >
-                          <option value="applied">Applied</option>
-                          <option value="screening">Screening</option>
-                          <option value="shortlisted">Shortlist</option>
-                          <option value="interview">Interview</option>
-                          <option value="offer">Offer</option>
-                          <option value="hired">Hired ✦</option>
-                          <option value="rejected">Reject</option>
-                        </select>
+                          onChange={(newStatus) => handleStatusChange(app.id, newStatus as ApplicationStatus)}
+                          variant="card"
+                          size="sm"
+                          options={[
+                            { value: "applied", label: "Applied" },
+                            { value: "screening", label: "Screening" },
+                            { value: "shortlisted", label: "Shortlist" },
+                            { value: "interview", label: "Interview" },
+                            { value: "offer", label: "Offer" },
+                            { value: "hired", label: "Hired ✦" },
+                            { value: "rejected", label: "Reject" },
+                          ]}
+                        />
                       </div>
                     </div>
                   </div>
@@ -1001,10 +1190,13 @@ export const CompanyJobCandidatesModal: React.FC<CompanyJobCandidatesModalProps>
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0">
-                        <img
+                        <UserAvatar
                           src={cand.profilePhoto}
                           alt={cand.fullName}
-                          className="w-9 h-9 rounded-lg object-cover ring-1 ring-slate-300 shrink-0"
+                          size="md"
+                          settings={cand.photoSettings}
+                          fallbackText={cand.fullName}
+                          className="shrink-0"
                         />
                         <div className="min-w-0">
                           <h4 className="text-xs font-black text-slate-900 uppercase truncate">{cand.fullName}</h4>
@@ -1112,6 +1304,15 @@ export const CompanyJobCandidatesModal: React.FC<CompanyJobCandidatesModalProps>
           isOpen={isEditJobOpen}
           onClose={() => setIsEditJobOpen(false)}
           job={currentJob}
+        />
+      )}
+
+      {inspectingProject && (
+        <GitHubProjectModal
+          isOpen={true}
+          onClose={() => setInspectingProject(null)}
+          repo={inspectingProject.repo}
+          username={inspectingProject.username}
         />
       )}
     </div>

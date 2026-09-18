@@ -19,7 +19,7 @@ export const CompanyReplyCounterModal: React.FC<CompanyReplyCounterModalProps> =
   const [revisedSalary, setRevisedSalary] = useState(candidateProposedSalary);
   const [revisedWorkMode, setRevisedWorkMode] = useState<string>(candidateProposedWorkMode);
   const [note, setNote] = useState(
-    `We reviewed your counter-proposal! We are excited about your verified technical background and can meet you at this adjusted compensation band with fast-tracked onboarding.`
+    bid.companyCounterDetails?.note || ""
   );
 
   const handleSubmit = (e: React.FormEvent) => {

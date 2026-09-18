@@ -178,11 +178,18 @@ export const CareerRadarDashboard: React.FC = () => {
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
               <span>AI Career Radar Active</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900 tracking-tight">
-              Good morning, {candidate.fullName.split(" ")[0]} 👋
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900 tracking-tight flex flex-wrap items-center gap-2">
+              <span>Radar locked on your next move,</span>
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-600 via-indigo-600 to-emerald-600">
+                {candidate.fullName
+                  ? candidate.fullName.split(" ")[0].charAt(0).toUpperCase() + candidate.fullName.split(" ")[0].slice(1).toLowerCase()
+                  : "Engineer"}
+              </span>
+              <span>⚡</span>
             </h1>
             <p className="text-xs sm:text-sm text-slate-600 font-medium leading-relaxed max-w-xl">
-              We curated <strong className="text-slate-900 font-black">{radarDeck.length} matching roles</strong> based on your tech stack, location, and salary goals.
+              Neural algorithms analyzed the talent market against your verified tech stack. We uncovered{" "}
+              <strong className="text-slate-900 font-black">{radarDeck.length} high-signal opportunities</strong> ready for your 1-click swipe.
             </p>
           </div>
 

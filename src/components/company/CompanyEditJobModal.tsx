@@ -18,6 +18,7 @@ import {
 import { useApp } from "../../context/AppContext";
 import { GeminiService } from "../../services/geminiService";
 import { Job, WorkMode, JobStatus } from "../../types";
+import { CustomSelect } from "../common/CustomSelect";
 
 interface CompanyEditJobModalProps {
   isOpen: boolean;
@@ -377,16 +378,18 @@ export const CompanyEditJobModal: React.FC<CompanyEditJobModalProps> = ({
                   <label className="block text-xs font-black text-slate-700 uppercase tracking-wider mb-1.5">
                     Posting Status
                   </label>
-                  <select
+                  <CustomSelect
                     value={status}
-                    onChange={(e) => setStatus(e.target.value as JobStatus)}
-                    className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 border-2 border-slate-200 text-xs font-bold text-slate-900 focus:bg-white focus:border-slate-900 focus:outline-none transition-all"
-                  >
-                    <option value="active">Active (Visible on Radar)</option>
-                    <option value="paused">Paused (Hide from Applicants)</option>
-                    <option value="draft">Draft (Private)</option>
-                    <option value="closed">Closed (Filled)</option>
-                  </select>
+                    onChange={(val) => setStatus(val as JobStatus)}
+                    variant="card"
+                    size="md"
+                    options={[
+                      { value: "active", label: "Active", sublabel: "Visible on radar for applicants", badge: "Live" },
+                      { value: "paused", label: "Paused", sublabel: "Hide from applicants temporarily" },
+                      { value: "draft", label: "Draft", sublabel: "Private internal draft" },
+                      { value: "closed", label: "Closed", sublabel: "Position filled" },
+                    ]}
+                  />
                 </div>
 
                 {/* Openings */}

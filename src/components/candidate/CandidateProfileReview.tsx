@@ -18,9 +18,20 @@ import {
   Trash2,
   Globe,
   ExternalLink,
+  GitBranch,
+  Star,
+  GitFork,
+  RefreshCw,
+  Check,
+  Loader2,
+  Sliders,
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
-import { EducationItem, ExperienceItem, ProjectItem } from "../../types";
+import { EducationItem, ExperienceItem, ProjectItem, GitHubRepoItem, ProfilePhotoSettings } from "../../types";
+import { GitHubProjectModal } from "../common/GitHubProjectModal";
+import { CustomSelect } from "../common/CustomSelect";
+import { UserAvatar } from "../common/UserAvatar";
+import { ProfilePhotoModal } from "../common/ProfilePhotoModal";
 
 export const CandidateProfileReview: React.FC = () => {
   const {
@@ -30,6 +41,8 @@ export const CandidateProfileReview: React.FC = () => {
     missingProfileFields,
     isCandidateProfileComplete,
     triggerCelebration,
+    authSignInWithGitHub,
+    connectCandidateGitHub,
   } = useApp();
 
   // Local editable states
@@ -47,6 +60,10 @@ export const CandidateProfileReview: React.FC = () => {
     candidate.profilePhoto ||
       "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80"
   );
+  const [photoSettings, setPhotoSettings] = useState<ProfilePhotoSettings>(
+    candidate.photoSettings || { shape: "squircle", frame: "minimal", filter: "normal", zoom: 1.0 }
+  );
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
 
   const [skills, setSkills] = useState<string[]>(candidate.skills || []);
   const [newSkillInput, setNewSkillInput] = useState("");
@@ -78,6 +95,40 @@ export const CandidateProfileReview: React.FC = () => {
   const [expDuration, setExpDuration] = useState("");
   const [expDescription, setExpDescription] = useState("");
 
+  // GitHub connection & verification state
+  const [gitHubUsernameInput, setGitHubUsernameInput] = useState("");
+  const [isConnectingGitHub, setIsConnectingGitHub] = useState(false);
+  const [gitHubError, setGitHubError] = useState("");
+  const [gitHubSuccess, setGitHubSuccess] = useState("");
+  const [inspectingProject, setInspectingProject] = useState<{ repo: GitHubRepoItem; username: string } | null>(null);
+
+  const handleConnectGitHubUsername = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!gitHubUsernameInput.trim()) return;
+    setGitHubError("");
+    setGitHubSuccess("");
+    setIsConnectingGitHub(true);
+    const res = await connectCandidateGitHub(gitHubUsernameInput.trim());
+    setIsConnectingGitHub(false);
+    if (!res.success) {
+      setGitHubError(res.error || "Failed to verify and connect GitHub profile.");
+    } else {
+      setGitHubSuccess("GitHub profile verified and connected successfully!");
+      setGitHubUsernameInput("");
+    }
+  };
+
+  const handleConnectGitHubOAuth = async () => {
+    setGitHubError("");
+    setGitHubSuccess("");
+    setIsConnectingGitHub(true);
+    const res = await authSignInWithGitHub("candidate");
+    setIsConnectingGitHub(false);
+    if (res.error) {
+      setGitHubError(res.error);
+    }
+  };
+
   // Sync state whenever candidate object is updated (e.g. via AI extraction)
   React.useEffect(() => {
     if (candidate) {
@@ -102,6 +153,7 @@ export const CandidateProfileReview: React.FC = () => {
       }
       if (candidate.bio) setBio(candidate.bio);
       if (candidate.profilePhoto) setProfilePhoto(candidate.profilePhoto);
+      if (candidate.photoSettings) setPhotoSettings(candidate.photoSettings);
       if (candidate.skills && candidate.skills.length > 0) setSkills(candidate.skills);
       if (candidate.education) setEducation(candidate.education);
       if (candidate.projects) setProjects(candidate.projects);
@@ -289,6 +341,17 @@ export const CandidateProfileReview: React.FC = () => {
       return;
     }
 
+    // Enforce mandatory GitHub connection
+    if (!candidate.githubData?.connected) {
+      setShowErrorBanner(true);
+      setGitHubError("⚠️ GitHub connection is mandatory to complete your profile. Please connect your GitHub account below.");
+      const el = document.getElementById("github-connection-section");
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth" });
+      }
+      return;
+    }
+
     const nextIsCompleted = true;
 
     updateCandidate({
@@ -303,6 +366,7 @@ export const CandidateProfileReview: React.FC = () => {
       preferredRole,
       bio,
       profilePhoto,
+      photoSettings,
       skills,
       education,
       projects,
@@ -392,55 +456,101 @@ export const CandidateProfileReview: React.FC = () => {
             {expectedSalary ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <AlertCircle className="w-3.5 h-3.5 text-red-500" />}
             <span>Expected Salary</span>
           </div>
+          <div className={`p-2 rounded-lg flex items-center gap-1.5 font-medium ${candidate.githubData?.connected ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}>
+            {candidate.githubData?.connected ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <AlertCircle className="w-3.5 h-3.5 text-red-500" />}
+            <span>GitHub ({candidate.githubData?.connected ? "Connected" : "Required"})</span>
+          </div>
         </div>
 
         {showErrorBanner && (
           <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
-            <span>⚠️ Your profile needs all required details before entering the Career Radar.</span>
+            <span>
+              {!candidate.githubData?.connected
+                ? "⚠️ GitHub profile connection is mandatory. Please connect your GitHub profile below before proceeding."
+                : "⚠️ Your profile needs all required details before entering the Career Radar."}
+            </span>
           </div>
         )}
       </div>
 
       {/* Main Review Form */}
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 sm:p-8 space-y-8">
-        {/* Photo Selection */}
+        {/* Photo Selection & Shape Customizer */}
         <div className="flex flex-col sm:flex-row items-center gap-6 pb-6 border-b border-slate-100">
-          <div className="relative">
-            <img
+          <div className="relative group cursor-pointer" onClick={() => setIsPhotoModalOpen(true)}>
+            <UserAvatar
               src={profilePhoto}
-              alt="candidate"
-              className="w-24 h-24 rounded-2xl object-cover ring-4 ring-emerald-100 shadow-md"
+              size="3xl"
+              settings={photoSettings}
+              fallbackText={fullName}
+              className="transition-transform group-hover:scale-105"
             />
             <button
+              type="button"
               id="change-photo-btn"
-              onClick={() => {
-                const nextIndex = (avatarPresets.indexOf(profilePhoto) + 1) % avatarPresets.length;
-                setProfilePhoto(avatarPresets[nextIndex]);
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsPhotoModalOpen(true);
               }}
-              className="absolute -bottom-2 -right-2 p-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-xs transition-colors cursor-pointer"
-              title="Click to cycle avatar"
+              className="absolute -bottom-2 -right-2 p-2 bg-slate-900 hover:bg-emerald-600 text-white rounded-xl shadow-md transition-colors cursor-pointer"
+              title="Customize photo, shape & frames"
             >
               <Camera className="w-4 h-4" />
             </button>
           </div>
-          <div className="text-center sm:text-left space-y-1">
-            <h3 className="text-sm font-bold text-slate-900">Profile Photo</h3>
-            <p className="text-xs text-slate-500">
-              Click the camera icon to switch avatar or choose from presets:
-            </p>
-            <div className="flex items-center gap-2 pt-1">
+
+          <div className="text-center sm:text-left space-y-2 flex-1">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-black text-slate-900 flex items-center justify-center sm:justify-start gap-2">
+                  <span>Profile Photo & Shape Styling</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 uppercase tracking-wide">
+                    {photoSettings?.shape || "Squircle"}
+                  </span>
+                  {photoSettings?.frame && photoSettings.frame !== "none" && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-800 uppercase tracking-wide">
+                      {photoSettings.frame} Frame
+                    </span>
+                  )}
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Upload custom photo or capture webcam, adjust custom shape, frame border, and zoom visible to recruiters.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsPhotoModalOpen(true)}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer shrink-0"
+              >
+                <Sliders className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Customize Photo</span>
+              </button>
+            </div>
+
+            <div className="flex items-center justify-center sm:justify-start gap-2 pt-1">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Quick Presets:</span>
               {avatarPresets.map((preset, idx) => (
                 <img
                   key={idx}
                   src={preset}
                   alt={`preset-${idx}`}
                   onClick={() => setProfilePhoto(preset)}
-                  className={`w-8 h-8 rounded-lg object-cover cursor-pointer ring-2 transition-all ${
+                  className={`w-7 h-7 rounded-lg object-cover cursor-pointer ring-2 transition-all ${
                     profilePhoto === preset ? "ring-emerald-500 scale-110" : "ring-transparent opacity-60 hover:opacity-100"
                   }`}
                 />
               ))}
+              {candidate.githubData?.avatarUrl && (
+                <button
+                  type="button"
+                  onClick={() => setProfilePhoto(candidate.githubData!.avatarUrl!)}
+                  className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-md text-[10px] font-bold text-slate-700 transition-colors cursor-pointer"
+                >
+                  Use GitHub
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -505,16 +615,17 @@ export const CandidateProfileReview: React.FC = () => {
 
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1.5">Work Preference</label>
-            <select
-              id="review-work-preference"
+            <CustomSelect
               value={workPreference}
-              onChange={(e) => setWorkPreference(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
-            >
-              <option value="Hybrid">Hybrid (Preferred in Ahmedabad)</option>
-              <option value="Remote">Remote</option>
-              <option value="Onsite">Onsite</option>
-            </select>
+              onChange={(val) => setWorkPreference(val)}
+              variant="card"
+              size="md"
+              options={[
+                { value: "Hybrid", label: "Hybrid", sublabel: "Preferred flexible balance" },
+                { value: "Remote", label: "Remote", sublabel: "100% remote positions" },
+                { value: "Onsite", label: "Onsite", sublabel: "Full-time in office" },
+              ]}
+            />
           </div>
 
           <div>
@@ -1093,6 +1204,295 @@ export const CandidateProfileReview: React.FC = () => {
           </div>
         </div>
 
+        {/* GitHub Verification & Telemetry Section (Mandatory) */}
+        <div id="github-connection-section" className="pt-6 border-t border-slate-100 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                    <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    GitHub Verification & Code Telemetry
+                    <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200">
+                      Mandatory
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Companies verify your public code repositories, tech stack breakdown, and recent activity.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {candidate.githubData?.connected && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 self-start sm:self-auto">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                Verified & Connected
+              </span>
+            )}
+          </div>
+
+          {/* Feedback banners */}
+          {gitHubError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-medium flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+              <span>{gitHubError}</span>
+            </div>
+          )}
+
+          {gitHubSuccess && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-medium flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{gitHubSuccess}</span>
+            </div>
+          )}
+
+          {/* If Connected: Show Rich GitHub Telemetry */}
+          {candidate.githubData?.connected ? (
+            <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white border border-slate-700 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-700/80">
+                <div className="flex items-center gap-3">
+                  <img
+                    src={candidate.githubData.avatarUrl || "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"}
+                    alt={candidate.githubData.username}
+                    className="w-12 h-12 rounded-xl border border-slate-600 object-cover"
+                  />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-bold text-sm text-white">{candidate.githubData.name || candidate.githubData.username}</h4>
+                      <a
+                        href={candidate.githubData.profileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-sky-400 hover:text-sky-300 font-mono inline-flex items-center gap-1"
+                      >
+                        @{candidate.githubData.username}
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                    {candidate.githubData.bio && (
+                      <p className="text-xs text-slate-300 line-clamp-1 mt-0.5">{candidate.githubData.bio}</p>
+                    )}
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      <span className="text-[11px] text-emerald-300 font-medium">
+                        {candidate.githubData.lastActiveSummary || "Active on GitHub"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={isConnectingGitHub}
+                    onClick={() => handleConnectGitHubUsername()}
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    title="Refresh latest GitHub repositories & stats"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isConnectingGitHub ? "animate-spin" : ""}`} />
+                    <span>Re-sync</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Stats Strip */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/60 text-center">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">Public Repos</span>
+                  <span className="text-lg font-black text-white">
+                    {candidate.githubData.publicRepos ?? (candidate.githubData as any).publicReposCount ?? candidate.githubData.topRepos?.length ?? 0}
+                  </span>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/60 text-center">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">Total Stars</span>
+                  <span className="text-lg font-black text-amber-400">
+                    ★ {candidate.githubData.totalStars ?? candidate.githubData.topRepos?.reduce((acc: number, r: any) => acc + (r.starsCount ?? r.stars ?? 0), 0) ?? 0}
+                  </span>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/60 text-center">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">Followers</span>
+                  <span className="text-lg font-black text-sky-400">
+                    {candidate.githubData.followers ?? (candidate.githubData as any).followersCount ?? 0}
+                  </span>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/60 text-center">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">Status</span>
+                  <span className="text-xs font-bold text-emerald-400 mt-1 inline-block">Verified Proof</span>
+                </div>
+              </div>
+
+              {/* Languages breakdown */}
+              {candidate.githubData.languages && candidate.githubData.languages.length > 0 && (
+                <div className="space-y-1.5">
+                  <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">Top Languages Detected</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {candidate.githubData.languages.map((lang, idx) => (
+                      <span
+                        key={idx}
+                        className="px-2.5 py-1 bg-slate-800 text-slate-200 border border-slate-700 rounded-lg text-xs font-medium"
+                      >
+                        {lang.name} <span className="text-[10px] text-slate-400">({lang.percentage}%)</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Featured Repos */}
+              {candidate.githubData.topRepos && candidate.githubData.topRepos.length > 0 && (
+                <div className="space-y-2.5 pt-2 border-t border-slate-700/80">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-sky-400" />
+                      <span>Featured Repositories & AI Intel ({candidate.githubData.topRepos.length})</span>
+                    </span>
+                    <span className="text-[10px] text-slate-400">Click to preview project & README</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {candidate.githubData.topRepos.map((repo, idx) => (
+                      <div
+                        key={idx}
+                        onClick={() => setInspectingProject({ repo, username: candidate.githubData?.username || "" })}
+                        className="p-3.5 rounded-2xl bg-slate-800/80 border border-slate-700 hover:border-sky-500 hover:bg-slate-800 transition-all text-xs group cursor-pointer flex flex-col justify-between gap-2.5"
+                      >
+                        <div className="space-y-1.5">
+                          <div className="flex items-start justify-between gap-1.5">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="font-bold text-white group-hover:text-sky-300 transition-colors truncate">
+                                {repo.name}
+                              </span>
+                              {repo.homepage && (
+                                <a
+                                  href={repo.homepage}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shrink-0 hover:bg-emerald-500/30 transition-colors inline-flex items-center gap-0.5"
+                                  title="Open Live App"
+                                >
+                                  <span>Live</span>
+                                  <ExternalLink className="w-2 h-2" />
+                                </a>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-amber-400 shrink-0 flex items-center gap-0.5 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20">
+                              ★ {repo.starsCount ?? repo.stars ?? 0}
+                            </span>
+                          </div>
+                          <p className="text-slate-300 line-clamp-2 text-[11px] leading-relaxed">
+                            {repo.description || "Public repository on GitHub"}
+                          </p>
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-700/60 flex items-center justify-between text-[10px]">
+                          <div className="flex items-center gap-2 text-slate-400">
+                            {repo.language && (
+                              <span className="inline-flex items-center gap-1 text-slate-200 font-medium">
+                                <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+                                {repo.language}
+                              </span>
+                            )}
+                            {(repo.forksCount ?? repo.forks ?? 0) > 0 && <span>• {repo.forksCount ?? repo.forks} forks</span>}
+                          </div>
+                          <span className="text-sky-400 font-semibold group-hover:underline flex items-center gap-1">
+                            Explain Project →
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* If NOT Connected: Connect Form */
+            <div className="p-6 rounded-2xl bg-amber-50/60 border-2 border-dashed border-amber-300 space-y-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wider">
+                    GitHub profile connection is mandatory
+                  </h4>
+                  <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+                    SwipeHire guarantees verified candidate credentials to hiring companies. Connect your GitHub to showcase your repositories, primary languages, and coding activity.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                {/* Method 1: Connect with GitHub OAuth */}
+                <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs flex flex-col justify-between gap-3">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Method 1</span>
+                    <strong className="text-xs font-bold text-slate-900 block mt-0.5">Quick Connect with GitHub</strong>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Authorize your GitHub account securely with one click.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isConnectingGitHub}
+                    onClick={handleConnectGitHubOAuth}
+                    className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-xs shadow-xs transition-all flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer"
+                  >
+                    {isConnectingGitHub ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+                    ) : (
+                      <svg className="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 24 24">
+                        <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                      </svg>
+                    )}
+                    <span>Connect with GitHub</span>
+                  </button>
+                </div>
+
+                {/* Method 2: Enter Public GitHub Username */}
+                <form
+                  onSubmit={handleConnectGitHubUsername}
+                  className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs flex flex-col justify-between gap-3"
+                >
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Method 2</span>
+                    <strong className="text-xs font-bold text-slate-900 block mt-0.5">Verify by GitHub Username</strong>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Enter your public GitHub username (e.g. <span className="font-mono text-slate-700">octocat</span>).
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-mono">@</span>
+                      <input
+                        type="text"
+                        placeholder="github_username"
+                        value={gitHubUsernameInput}
+                        onChange={(e) => setGitHubUsernameInput(e.target.value)}
+                        className="w-full pl-7 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-sky-500 font-mono"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={isConnectingGitHub || !gitHubUsernameInput.trim()}
+                      className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs disabled:opacity-60 cursor-pointer shrink-0 flex items-center gap-1.5"
+                    >
+                      {isConnectingGitHub ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+                      ) : (
+                        <Check className="w-3.5 h-3.5" />
+                      )}
+                      <span>Verify</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Save & Enter Career Radar CTA */}
         <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           <button
@@ -1112,6 +1512,34 @@ export const CandidateProfileReview: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {inspectingProject && (
+        <GitHubProjectModal
+          isOpen={true}
+          onClose={() => setInspectingProject(null)}
+          repo={inspectingProject.repo}
+          username={inspectingProject.username}
+        />
+      )}
+
+      {/* Profile Photo Customizer Modal */}
+      <ProfilePhotoModal
+        isOpen={isPhotoModalOpen}
+        onClose={() => setIsPhotoModalOpen(false)}
+        currentPhoto={profilePhoto}
+        currentSettings={photoSettings}
+        githubAvatarUrl={candidate.githubData?.avatarUrl}
+        githubUsername={candidate.githubData?.username}
+        candidateName={fullName}
+        onSave={(newPhoto, newSettings) => {
+          setProfilePhoto(newPhoto);
+          setPhotoSettings(newSettings);
+          updateCandidate({
+            profilePhoto: newPhoto,
+            photoSettings: newSettings,
+          });
+        }}
+      />
     </div>
   );
 };

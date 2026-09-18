@@ -20,9 +20,17 @@ import {
   Trash2,
   Sparkles,
   Plus,
+  Palette,
+  Layout,
+  Smartphone,
+  Monitor,
+  Wand2,
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import { DEFAULT_EMAIL_TEMPLATES } from "../../services/defaultTemplates";
+import { CustomSelect } from "../common/CustomSelect";
+import { EmailPreviewModal } from "../common/EmailPreviewModal";
+import { EmailDesignTheme, EMAIL_THEMES, buildDesignedEmailHtml } from "../../utils/emailDesigner";
 
 export const CompanyEmailConnectPage: React.FC = () => {
   const {
@@ -86,6 +94,45 @@ export const CompanyEmailConnectPage: React.FC = () => {
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [templateSaveError, setTemplateSaveError] = useState("");
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  // Email Designer & Live Preview State
+  const [designTheme, setDesignTheme] = useState<EmailDesignTheme>("modern");
+  const [editorTab, setEditorTab] = useState<"edit" | "preview">("edit");
+  const [inLineDevice, setInLineDevice] = useState<"desktop" | "mobile">("desktop");
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [ctaText, setCtaText] = useState("Schedule Interview Round →");
+  const [ctaUrl, setCtaUrl] = useState("https://swipehire.ownmylands.workers.dev");
+
+  const handleBeautifyEmail = () => {
+    const body = currentBody.trim();
+    if (!body) return;
+
+    if (!body.includes("•") && !body.includes("- ") && !body.includes("1.")) {
+      const paragraphs = body.split(/\n+/).filter(Boolean);
+      const greeting = paragraphs[0] || "Hi {{candidate_name}},";
+      const middle =
+        paragraphs.slice(1, -1).join("\n\n") ||
+        "We are impressed by your profile and verified engineering skills on SwipeHired!";
+      const signoff = paragraphs[paragraphs.length - 1] || "Warm regards,\n{{company_name}} Hiring Team";
+
+      const beautified = `${greeting}
+
+${middle}
+
+Key Discussion & Agenda:
+• Overview of technical architecture and relevant stack experience
+• Key responsibilities, impact areas, and growth for the {{job_title}} role
+• Our engineering culture, team cadence, and product roadmap
+• Open Q&A with our engineering leadership
+
+Next Steps:
+• Review your scheduled availability via your SwipeHired dashboard.
+• A calendar invitation with meeting coordinates will be dispatched shortly.
+
+${signoff}`;
+      setCurrentBody(beautified);
+    }
+  };
 
   // Add Template Modal State
   const [showAddTemplateModal, setShowAddTemplateModal] = useState(false);
@@ -734,6 +781,15 @@ export const CompanyEmailConnectPage: React.FC = () => {
                 )}
                 <button
                   type="button"
+                  onClick={() => setShowPreviewModal(true)}
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-full text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                  title="Open full interactive preview"
+                >
+                  <Eye className="w-4 h-4 text-sky-400" />
+                  <span>Preview Email</span>
+                </button>
+                <button
+                  type="button"
                   onClick={() => {
                     setNewTemplateTitle("");
                     setNewTemplateCategory("custom");
@@ -829,17 +885,19 @@ export const CompanyEmailConnectPage: React.FC = () => {
                   <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1.5">
                     Category
                   </label>
-                  <select
+                  <CustomSelect
                     value={currentCategory}
-                    onChange={(e) => setCurrentCategory(e.target.value as any)}
-                    className="w-full px-3 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-2xl text-xs text-slate-900 font-bold focus:border-slate-900 focus:outline-none cursor-pointer"
-                  >
-                    <option value="interview">Interview Invite</option>
-                    <option value="shortlisted">Shortlisted</option>
-                    <option value="received">App Received</option>
-                    <option value="rejection">Rejection</option>
-                    <option value="custom">Custom Outreach</option>
-                  </select>
+                    onChange={(val) => setCurrentCategory(val as any)}
+                    variant="card"
+                    size="md"
+                    options={[
+                      { value: "interview", label: "Interview Invite", badge: "Stage" },
+                      { value: "shortlisted", label: "Shortlisted", badge: "Stage" },
+                      { value: "received", label: "App Received", badge: "Auto" },
+                      { value: "rejection", label: "Rejection", badge: "Stage" },
+                      { value: "custom", label: "Custom Outreach", badge: "Direct" },
+                    ]}
+                  />
                 </div>
               </div>
 
@@ -857,46 +915,226 @@ export const CompanyEmailConnectPage: React.FC = () => {
                 />
               </div>
 
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-700">
-                    Message Template Body
-                  </label>
-                  <div className="flex items-center gap-1 text-[10px] text-slate-500">
-                    <span>Insert:</span>
+              {/* Design Theme & Template Mode Strip */}
+              <div className="p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Palette className="w-4 h-4 text-sky-600" />
+                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-700">
+                      Email Design Style:
+                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {(Object.keys(EMAIL_THEMES) as EmailDesignTheme[]).map((themeKey) => {
+                        const isSelected = designTheme === themeKey;
+                        const t = EMAIL_THEMES[themeKey];
+                        return (
+                          <button
+                            key={themeKey}
+                            type="button"
+                            onClick={() => setDesignTheme(themeKey)}
+                            className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                              isSelected
+                                ? "bg-slate-900 text-white shadow-xs scale-102"
+                                : "bg-white text-slate-700 hover:bg-slate-200 border border-slate-300"
+                            }`}
+                          >
+                            <span
+                              className="w-2 h-2 rounded-full shrink-0"
+                              style={{ background: t.accentColor }}
+                            />
+                            <span>{t.name}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Mode Switcher: Edit vs Live Preview */}
+                  <div className="flex items-center bg-white p-1 rounded-xl border border-slate-200 shadow-2xs self-start sm:self-auto">
                     <button
                       type="button"
-                      onClick={() => setCurrentBody((prev) => `${prev} {{candidate_name}}`)}
-                      className="text-emerald-700 hover:underline font-bold cursor-pointer"
+                      onClick={() => setEditorTab("edit")}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        editorTab === "edit"
+                          ? "bg-slate-900 text-white shadow-xs"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
                     >
-                      Name
+                      Edit Template
                     </button>
-                    <span>·</span>
                     <button
                       type="button"
-                      onClick={() => setCurrentBody((prev) => `${prev} {{job_title}}`)}
-                      className="text-sky-700 hover:underline font-bold cursor-pointer"
+                      onClick={() => setEditorTab("preview")}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                        editorTab === "preview"
+                          ? "bg-sky-600 text-white shadow-xs"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
                     >
-                      Role
-                    </button>
-                    <span>·</span>
-                    <button
-                      type="button"
-                      onClick={() => setCurrentBody((prev) => `${prev} {{company_name}}`)}
-                      className="text-amber-700 hover:underline font-bold cursor-pointer"
-                    >
-                      Company
+                      <Eye className="w-3 h-3" />
+                      <span>Live Preview</span>
                     </button>
                   </div>
                 </div>
-                <textarea
-                  rows={8}
-                  required
-                  value={currentBody}
-                  onChange={(e) => setCurrentBody(e.target.value)}
-                  className="w-full p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl text-xs text-slate-900 leading-relaxed font-mono focus:border-slate-900 focus:outline-none"
-                />
+
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/80 text-xs">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleBeautifyEmail}
+                      className="px-2.5 py-1 bg-white hover:bg-amber-50 text-amber-800 border border-amber-300 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                      title="Auto-format plain text with structured bullet points and agenda"
+                    >
+                      <Wand2 className="w-3 h-3 text-amber-600" />
+                      <span>✨ Beautify into Designed Layout</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowPreviewModal(true)}
+                      className="px-2.5 py-1 bg-white hover:bg-sky-50 text-sky-700 border border-sky-300 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      <Layout className="w-3 h-3 text-sky-600" />
+                      <span>Fullscreen Device Preview</span>
+                    </button>
+                  </div>
+
+                  <span className="text-[10px] text-slate-500 font-medium">
+                    Converts plain text to responsive HTML with company branding & CTA button
+                  </span>
+                </div>
               </div>
+
+              {editorTab === "edit" ? (
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-700">
+                      Message Template Body
+                    </label>
+                    <div className="flex items-center gap-1 text-[10px] text-slate-500">
+                      <span>Insert:</span>
+                      <button
+                        type="button"
+                        onClick={() => setCurrentBody((prev) => `${prev} {{candidate_name}}`)}
+                        className="text-emerald-700 hover:underline font-bold cursor-pointer"
+                      >
+                        Name
+                      </button>
+                      <span>·</span>
+                      <button
+                        type="button"
+                        onClick={() => setCurrentBody((prev) => `${prev} {{job_title}}`)}
+                        className="text-sky-700 hover:underline font-bold cursor-pointer"
+                      >
+                        Role
+                      </button>
+                      <span>·</span>
+                      <button
+                        type="button"
+                        onClick={() => setCurrentBody((prev) => `${prev} {{company_name}}`)}
+                        className="text-amber-700 hover:underline font-bold cursor-pointer"
+                      >
+                        Company
+                      </button>
+                    </div>
+                  </div>
+                  <textarea
+                    rows={8}
+                    required
+                    value={currentBody}
+                    onChange={(e) => setCurrentBody(e.target.value)}
+                    className="w-full p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl text-xs text-slate-900 leading-relaxed font-mono focus:border-slate-900 focus:outline-none"
+                  />
+
+                  {/* Primary CTA Button Config */}
+                  <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-xl grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-600 mb-1">
+                        Primary CTA Button Text
+                      </label>
+                      <input
+                        type="text"
+                        value={ctaText}
+                        onChange={(e) => setCtaText(e.target.value)}
+                        placeholder="e.g. Schedule Interview Round →"
+                        className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold focus:outline-none focus:border-slate-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-600 mb-1">
+                        Primary Button Link URL
+                      </label>
+                      <input
+                        type="text"
+                        value={ctaUrl}
+                        onChange={(e) => setCtaUrl(e.target.value)}
+                        placeholder="https://yourcompany.com or candidate portal"
+                        className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-mono focus:outline-none focus:border-slate-900"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* In-line Live Designed Preview */
+                <div className="border-2 border-slate-300 rounded-2xl overflow-hidden bg-slate-100 space-y-2">
+                  <div className="p-3 bg-slate-900 text-white flex items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      <span className="font-bold">Live Designed Email Simulation</span>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        (With sample candidate: Alex Johnson)
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setInLineDevice("desktop")}
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-bold flex items-center gap-1 cursor-pointer ${
+                          inLineDevice === "desktop" ? "bg-slate-700 text-white" : "text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        <Monitor className="w-3 h-3" />
+                        <span>Desktop</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setInLineDevice("mobile")}
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-bold flex items-center gap-1 cursor-pointer ${
+                          inLineDevice === "mobile" ? "bg-slate-700 text-white" : "text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        <Smartphone className="w-3 h-3" />
+                        <span>Mobile</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="p-4 flex justify-center">
+                    <div
+                      className={`transition-all ${
+                        inLineDevice === "mobile" ? "w-[380px]" : "w-full max-w-[620px]"
+                      } rounded-xl overflow-hidden shadow-md border border-slate-300 bg-white`}
+                    >
+                      <iframe
+                        title="Inline Email Preview"
+                        srcDoc={buildDesignedEmailHtml({
+                          theme: designTheme,
+                          subject: currentSubject,
+                          bodyText: currentBody,
+                          companyName: company.companyName || "SwipeHired Partner",
+                          candidateName: "Alex Johnson",
+                          jobTitle: currentSubject.includes("{{job_title}}") ? "Senior Full-Stack Engineer" : "Engineering Role",
+                          senderName: senderName || company.companyName,
+                          ctaText,
+                          ctaUrl,
+                        })}
+                        className="w-full h-[520px] border-none bg-white"
+                        sandbox="allow-same-origin"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Template Actions Footer */}
@@ -1001,17 +1239,19 @@ export const CompanyEmailConnectPage: React.FC = () => {
                       <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1">
                         Category
                       </label>
-                      <select
+                      <CustomSelect
                         value={newTemplateCategory}
-                        onChange={(e) => setNewTemplateCategory(e.target.value as any)}
-                        className="w-full px-3 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs text-slate-900 font-bold focus:border-slate-900 focus:outline-none cursor-pointer"
-                      >
-                        <option value="interview">Interview Invite</option>
-                        <option value="shortlisted">Shortlisted</option>
-                        <option value="received">App Received</option>
-                        <option value="rejection">Rejection</option>
-                        <option value="custom">Custom Outreach</option>
-                      </select>
+                        onChange={(val) => setNewTemplateCategory(val as any)}
+                        variant="card"
+                        size="md"
+                        options={[
+                          { value: "interview", label: "Interview Invite", badge: "Stage" },
+                          { value: "shortlisted", label: "Shortlisted", badge: "Stage" },
+                          { value: "received", label: "App Received", badge: "Auto" },
+                          { value: "rejection", label: "Rejection", badge: "Stage" },
+                          { value: "custom", label: "Custom Outreach", badge: "Direct" },
+                        ]}
+                      />
                     </div>
                   </div>
 
@@ -1575,6 +1815,22 @@ export const CompanyEmailConnectPage: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {showPreviewModal && (
+        <EmailPreviewModal
+          isOpen={showPreviewModal}
+          onClose={() => setShowPreviewModal(false)}
+          subject={currentSubject}
+          bodyText={currentBody}
+          companyName={company.companyName || "SwipeHired Partner"}
+          candidateName="Alex Johnson"
+          jobTitle={currentSubject.includes("{{job_title}}") ? "Senior Full-Stack Engineer" : "Engineering Role"}
+          senderName={senderName || company.companyName}
+          initialTheme={designTheme}
+          ctaText={ctaText}
+          ctaUrl={ctaUrl}
+        />
       )}
     </div>
   );

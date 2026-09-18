@@ -18,6 +18,7 @@ import {
   FileCheck2,
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
+import { CustomSelect } from "../common/CustomSelect";
 
 export const CandidateAgreementPage: React.FC = () => {
   const { candidate, signCommissionAgreement, setActiveView, triggerCelebration } = useApp();
@@ -544,21 +545,22 @@ export const CandidateAgreementPage: React.FC = () => {
               <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
                 Signature Font Style
               </label>
-              <select
+              <CustomSelect
                 value={signatureStyle}
-                onChange={(e) => {
-                  setSignatureStyle(e.target.value);
+                onChange={(val) => {
+                  setSignatureStyle(val);
                   if (isSigned) {
-                    // Update timestamp on style change
                     setSignTimestamp(new Date().toISOString());
                   }
                 }}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
-              >
-                <option value="style-script">Elegant Script (Cursive)</option>
-                <option value="style-cursive">Classic Italic</option>
-                <option value="style-modern">Modern Block Script</option>
-              </select>
+                variant="card"
+                size="md"
+                options={[
+                  { value: "style-script", label: "Elegant Script", sublabel: "Cursive flow font" },
+                  { value: "style-cursive", label: "Classic Italic", sublabel: "Formal italic hand" },
+                  { value: "style-modern", label: "Modern Block Script", sublabel: "Clean contemporary pen" },
+                ]}
+              />
             </div>
           </div>
 

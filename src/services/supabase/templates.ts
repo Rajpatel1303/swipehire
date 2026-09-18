@@ -1,6 +1,7 @@
 import { supabase } from "./client";
 import { EmailTemplate, WhatsAppTemplate } from "../../types";
 import { DEFAULT_EMAIL_TEMPLATES, DEFAULT_WHATSAPP_TEMPLATES } from "../defaultTemplates";
+import { AuditService } from "./audit";
 
 export class TemplatesService {
   /**
@@ -65,9 +66,11 @@ export class TemplatesService {
         resolvedCompanyId = userComp?.id;
       }
 
-      if (!resolvedCompanyId) {
-        throw new Error("Cannot save template: No associated company found for your user session.");
-      }
+      const { data: existing } = await supabase
+        .from("email_templates")
+        .select("*")
+        .eq("id", template.id)
+        .maybeSingle();
 
       const payload: any = {
         id: template.id,
@@ -88,6 +91,18 @@ export class TemplatesService {
         console.error("[TemplatesService] Failed to upsert email template:", error);
         throw new Error(`Database error saving email template: ${error.message}`);
       }
+
+      await AuditService.log({
+        actorUserId: authUser.id,
+        actorRole: "company",
+        companyId: resolvedCompanyId,
+        action: existing ? "email_template_updated" : "email_template_created",
+        entityType: "template",
+        entityId: data.id,
+        oldData: existing ? { title: existing.title, category: existing.category } : {},
+        newData: { title: data.title, category: data.category, subject: data.subject },
+        metadata: { title: data.title, category: data.category },
+      });
 
       return {
         id: data.id,
@@ -113,6 +128,12 @@ export class TemplatesService {
         throw new Error("Unauthorized: Please sign in to delete email templates.");
       }
 
+      const { data: existing } = await supabase
+        .from("email_templates")
+        .select("title, company_id")
+        .eq("id", id)
+        .maybeSingle();
+
       const { error } = await supabase
         .from("email_templates")
         .delete()
@@ -122,6 +143,16 @@ export class TemplatesService {
         console.error("[TemplatesService] Failed to delete email template:", error);
         throw new Error(`Database error deleting email template: ${error.message}`);
       }
+
+      await AuditService.log({
+        actorUserId: authData.user.id,
+        actorRole: "company",
+        companyId: existing?.company_id,
+        action: "email_template_deleted",
+        entityType: "template",
+        entityId: id,
+        oldData: { title: existing?.title },
+      });
 
       return true;
     } catch (err: any) {

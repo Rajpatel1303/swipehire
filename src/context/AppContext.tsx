@@ -26,6 +26,9 @@ import { supabase } from "../services/supabaseClient";
 import { calculateJobMatch } from "../utils/matchingEngine";
 import { DEFAULT_EMAIL_TEMPLATES, DEFAULT_WHATSAPP_TEMPLATES } from "../services/defaultTemplates";
 import { safeStorage } from "../utils/safeStorage";
+import { SupportSessionClient, SupportSessionData } from "../utils/supportSession";
+import { GitHubService } from "../services/githubService";
+import { buildDesignedEmailHtml } from "../utils/emailDesigner";
 
 export const emptyCandidateProfile: CandidateProfile = {
   id: "",
@@ -135,12 +138,7 @@ export type ActiveView =
   | "company-email-connect"
   | "company-interviews"
   | "company-compare"
-  | "blind-marketplace"
-  | "admin-overview"
-  | "admin-users"
-  | "admin-companies"
-  | "admin-jobs"
-  | "admin-reports";
+  | "blind-marketplace";
 
 interface AppContextType {
   // Supabase Live Status
@@ -178,6 +176,12 @@ interface AppContextType {
   authSignInWithGoogle: (
     role: "candidate" | "company"
   ) => Promise<{ error?: string }>;
+  authSignInWithGitHub: (
+    role?: "candidate"
+  ) => Promise<{ error?: string }>;
+  connectCandidateGitHub: (
+    username: string
+  ) => Promise<{ success: boolean; error?: string }>;
   resendConfirmationEmail: (
     email: string
   ) => Promise<{ success: boolean; error?: string }>;
@@ -259,7 +263,7 @@ interface AppContextType {
   ) => void;
   respondToTalentBid: (
     bidId: string,
-    action: "accept" | "counter" | "decline",
+    action: "accept" | "counter" | "decline" | "withdraw_counter",
     counterDetails?: {
       proposedSalary: string;
       proposedWorkMode: string;
@@ -272,14 +276,6 @@ interface AppContextType {
     details?: {
       revisedSalary?: string;
       revisedWorkMode?: string;
-      note?: string;
-    }
-  ) => void;
-  simulateCandidateCounterOffer: (
-    bidId: string,
-    counterData?: {
-      proposedSalary?: string;
-      proposedWorkMode?: string;
       note?: string;
     }
   ) => void;
@@ -317,12 +313,25 @@ interface AppContextType {
   sendEmailFromCompany: (
     candidateEmail: string,
     subject: string,
-    body: string
+    body: string,
+    html?: string
   ) => Promise<{ success: boolean; message: string }>;
 
-  // Admin Data
+  // Admin Data & Operations
   adminReports: AdminReport[];
-  resolveAdminReport: (id: string) => void;
+  resolveAdminReport: (id: string, status?: "resolved" | "dismissed") => Promise<void>;
+  adminSuspendCandidate: (candidateId: string, isSuspended: boolean) => Promise<boolean>;
+  adminVerifyCandidateSkills: (candidateId: string, skills: string[]) => Promise<boolean>;
+  adminResetCandidatePreferences: (candidateId: string) => Promise<boolean>;
+  adminDeleteCandidate: (candidateId: string) => Promise<boolean>;
+  adminVerifyCompany: (companyId: string, isVerified: boolean) => Promise<boolean>;
+  adminSuspendCompany: (companyId: string, isSuspended: boolean) => Promise<boolean>;
+  adminUpdateJobStatus: (jobId: string, status: Job["status"], isFeatured?: boolean) => Promise<boolean>;
+  adminDeleteJob: (jobId: string) => Promise<boolean>;
+
+  // Support Session (Admin Support Mode)
+  supportSession: SupportSessionData | null;
+  exitSupportMode: () => Promise<void>;
 
   // Helpers
   triggerCelebration: () => void;
@@ -332,6 +341,11 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  // Support Session State (Tab scoped, initialized from sessionStorage)
+  const [supportSession, setSupportSession] = useState<SupportSessionData | null>(() => {
+    return SupportSessionClient.get()?.session || null;
+  });
+
   // Supabase connection & Auth Lifecycle State Machine
   const [isSupabaseConnected, setIsSupabaseConnected] = useState<boolean>(true);
   const [isSupabaseSyncing, setIsSupabaseSyncing] = useState<boolean>(false);
@@ -499,6 +513,132 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     refreshFromSupabase();
   }, [refreshFromSupabase]);
 
+  // Window Focus, Visibility & Cross-Tab Storage Sync
+  useEffect(() => {
+    const handleFocus = () => {
+      refreshFromSupabase();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshFromSupabase();
+      }
+    };
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === "swipehired_talent_bids" && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed)) {
+            setTalentBids(parsed);
+          }
+        } catch {
+          // ignore parsing error
+        }
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, [refreshFromSupabase]);
+
+  // Real-time Supabase postgres_changes listener for talent_bids
+  useEffect(() => {
+    const channel = supabase
+      .channel("public_talent_bids_sync")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "talent_bids" },
+        async () => {
+          try {
+            const updated = await SupabaseService.getTalentBids();
+            if (updated && updated.length > 0) {
+              setTalentBids(updated);
+              safeStorage.setJSON("swipehired_talent_bids", updated);
+            }
+          } catch (e) {
+            console.warn("[RealtimeSync] Failed to pull updated bids:", e);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Support Session Bootstrap Effect
+  useEffect(() => {
+    const initSupportSession = async () => {
+      try {
+        if (typeof window === "undefined") return;
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get("support_token");
+
+        if (token) {
+          // Immediately strip token from URL to protect against history leakage
+          SupportSessionClient.stripTokenFromUrl();
+
+          const res = await fetch(`/api/support-session/validate?token=${encodeURIComponent(token)}`);
+          const data = await res.json();
+
+          if (data.valid && data.session) {
+            SupportSessionClient.set(token, data.session);
+            setSupportSession(data.session);
+
+            const targetRole = data.session.targetRole;
+            setRole(targetRole);
+            safeStorage.setItem("swipehired_role", targetRole);
+
+            if (targetRole === "candidate") {
+              setAuthStatus("AUTHENTICATED_CANDIDATE");
+              const cands = await SupabaseService.getCandidates();
+              const found = cands.find(
+                (c) => c.id === data.session.targetEntityId || c.userId === data.session.targetUserId
+              );
+              if (found) {
+                setCandidate(found);
+                safeStorage.setJSON("swipehired_candidate", found);
+                setActiveView(found.isCompleted ? "candidate-radar" : "candidate-profile");
+              }
+            } else if (targetRole === "company") {
+              setAuthStatus("AUTHENTICATED_COMPANY");
+              const comps = await SupabaseService.getCompanies();
+              const found = comps.find(
+                (c) => c.id === data.session.targetEntityId || c.userId === data.session.targetUserId
+              );
+              if (found) {
+                setCompany(found);
+                safeStorage.setJSON("swipehired_company", found);
+                setActiveView("company-cockpit");
+              }
+            }
+          } else {
+            console.warn("[SupportSession] Token validation failed:", data.error);
+            SupportSessionClient.clear();
+            setSupportSession(null);
+          }
+        } else {
+          // Verify if tab already has an active support session
+          const existing = SupportSessionClient.get();
+          if (existing?.session) {
+            setSupportSession(existing.session);
+          }
+        }
+      } catch (err) {
+        console.error("[SupportSession Bootstrap Error]:", err);
+      }
+    };
+
+    initSupportSession();
+  }, []);
+
   // Sync to safe storage
   useEffect(() => {
     if (role) safeStorage.setItem("swipehired_role", role);
@@ -613,6 +753,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (!candidate.profilePhoto?.trim()) missing.push("Profile Photo");
     if (!candidate.preferredRole?.trim()) missing.push("Preferred Job Role");
     if (!candidate.expectedSalary?.trim()) missing.push("Expected Salary");
+    if (!candidate.githubData?.connected) missing.push("Connected GitHub Account");
     return missing;
   }, [candidate]);
 
@@ -622,7 +763,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       !!candidate.email &&
       candidate.skills?.length > 0 &&
       !!candidate.preferredRole &&
-      !!candidate.expectedSalary
+      !!candidate.expectedSalary &&
+      !!candidate.githubData?.connected
     );
   }, [candidate]);
 
@@ -735,7 +877,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const respondToTalentBid = (
     bidId: string,
-    action: "accept" | "counter" | "decline",
+    action: "accept" | "counter" | "decline" | "withdraw_counter",
     counterDetails?: {
       proposedSalary: string;
       proposedWorkMode: string;
@@ -895,6 +1037,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         if (action === "decline") {
           const updatedBid: TalentBid = { ...bid, status: "declined", lastActionBy: "candidate" };
+          SupabaseService.saveTalentBid(updatedBid).catch(console.warn);
+          return updatedBid;
+        }
+
+        if (action === "withdraw_counter") {
+          const updatedBid: TalentBid = {
+            ...bid,
+            status: "pending",
+            lastActionBy: "candidate",
+            counterOfferDetails: undefined,
+            companyCounterDetails: undefined,
+          };
           SupabaseService.saveTalentBid(updatedBid).catch(console.warn);
           return updatedBid;
         }
@@ -1122,65 +1276,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     );
   };
 
-  const simulateCandidateCounterOffer = (
-    bidId: string,
-    counterData?: {
-      proposedSalary?: string;
-      proposedWorkMode?: string;
-      note?: string;
-    }
-  ) => {
-    const defaultSalary = "₹5–6.5 LPA";
-    const defaultWorkMode = "Remote";
-    const defaultNote = "Thank you for the upfront offer! Given my recent project experience and technical benchmarks, I would be thrilled to move forward if we can align on ₹5–6.5 LPA.";
-
-    setTalentBids((prev) =>
-      prev.map((bid) => {
-        if (bid.id !== bidId) return bid;
-        const proposedSalary = counterData?.proposedSalary || defaultSalary;
-        const proposedWorkMode = counterData?.proposedWorkMode || defaultWorkMode;
-        const note = counterData?.note || defaultNote;
-
-        const updatedBid: TalentBid = {
-          ...bid,
-          status: "countered",
-          lastActionBy: "candidate",
-          counterOfferDetails: {
-            proposedSalary,
-            proposedWorkMode,
-            note,
-            counteredAt: new Date().toISOString(),
-          },
-          negotiationHistory: [
-            ...(bid.negotiationHistory || []),
-            {
-              sender: "candidate",
-              senderName: "Anonymous Candidate",
-              salary: proposedSalary,
-              workMode: proposedWorkMode,
-              note,
-              timestamp: new Date().toISOString(),
-            },
-          ],
-        };
-
-        SupabaseService.saveTalentBid(updatedBid).catch(console.warn);
-
-        addNotification({
-          recipientId: bid.companyId,
-          role: "company",
-          title: `💬 Counter-Offer Received!`,
-          message: `Candidate countered your offer for '${bid.jobTitle}' with ${proposedSalary} (${proposedWorkMode}): "${note}"`,
-          type: "status",
-          linkAction: "marketplace",
-        });
-
-        triggerCelebration();
-        return updatedBid;
-      })
-    );
-  };
-
   // Anti-Ghosting Constructive Feedback Generator
   const requestConstructiveFeedback = async (
     applicationId: string
@@ -1250,6 +1345,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       // Persist to Supabase
       SupabaseService.saveCandidate(next).catch(console.warn);
+
+      // Immediately sync local applications in state for real-time recruiter visibility
+      if (updated.profilePhoto !== undefined || updated.photoSettings !== undefined) {
+        setApplications((prevApps) =>
+          prevApps.map((app) =>
+            app.candidateId === next.id
+              ? {
+                  ...app,
+                  candidatePhoto: next.profilePhoto || app.candidatePhoto,
+                  candidatePhotoSettings: next.photoSettings || app.candidatePhotoSettings,
+                }
+              : app
+          )
+        );
+      }
+
       return next;
     });
   };
@@ -1992,12 +2103,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const sendEmailFromCompany = async (
     candidateEmail: string,
     subject: string,
-    body: string
+    body: string,
+    html?: string
   ): Promise<{ success: boolean; message: string }> => {
     const integration = company.emailIntegration;
-    const sender = integration?.isConnected
-      ? `${integration.senderName} <${integration.fromEmail || integration.connectedEmail}>`
-      : `${company.companyName} Recruiting <${company.email}>`;
+    const isConnected = Boolean(integration?.isConnected);
+
+    if (!isConnected) {
+      return {
+        success: false,
+        message: "Email integration is not connected. Please connect your custom business email or SMTP server first.",
+      };
+    }
+
+    const sender = `${integration.senderName || company.companyName} <${integration.fromEmail || integration.connectedEmail || integration.smtpUser}>`;
+
+    const effectiveHtml = html || buildDesignedEmailHtml({
+      subject,
+      bodyText: body,
+      companyName: company.companyName || "SwipeHired Partner",
+      senderName: integration.senderName || company.companyName,
+    });
 
     try {
       if (integration?.provider === "smtp" && integration?.smtpHost && integration?.smtpUser) {
@@ -2011,36 +2137,145 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               smtpSecure: integration.smtpSecure,
               smtpUser: integration.smtpUser,
               smtpPassword: integration.smtpPassword,
-              senderName: integration.senderName,
-              fromEmail: integration.fromEmail || integration.connectedEmail,
+              senderName: integration.senderName || company.companyName,
+              fromEmail: integration.fromEmail || integration.connectedEmail || integration.smtpUser,
             },
             to: candidateEmail,
             subject,
             body,
+            html: effectiveHtml,
           }),
         });
-        if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.success) {
           return {
             success: true,
-            message: `Email dispatched successfully from ${sender} to ${candidateEmail}`,
+            message: data.message || `Email dispatched successfully from ${sender} to ${candidateEmail}`,
           };
         }
+        return {
+          success: false,
+          message: data.error || data.message || `Failed to dispatch email (status ${res.status}).`,
+        };
       }
-    } catch (err) {
-      console.warn("[sendEmailFromCompany] API dispatch failed, using fallback:", err);
+      return {
+        success: false,
+        message: "Incomplete SMTP settings. Please verify your host, user credentials, and port.",
+      };
+    } catch (err: any) {
+      console.warn("[sendEmailFromCompany] API dispatch failed:", err);
+      return {
+        success: false,
+        message: err.message || "Failed to dispatch email. Please check your network and SMTP credentials.",
+      };
     }
-
-    return {
-      success: true,
-      message: `Email dispatched successfully from ${sender} to ${candidateEmail}`,
-    };
   };
 
-  // Admin
-  const resolveAdminReport = (id: string) => {
+  // Admin Operations
+  const resolveAdminReport = async (id: string, status: "resolved" | "dismissed" = "resolved") => {
     setAdminReports((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status: "resolved" } : r))
+      prev.map((r) => (r.id === id ? { ...r, status } : r))
     );
+    await SupabaseService.resolveAdminReport(id, status, authUser?.id || "admin");
+  };
+
+  const adminSuspendCandidate = async (candidateId: string, isSuspended: boolean): Promise<boolean> => {
+    const success = await SupabaseService.suspendCandidate(candidateId, isSuspended, authUser?.id || "admin");
+    if (success) {
+      setAllCandidates((prev) =>
+        prev.map((c) => (c.id === candidateId ? { ...c, isSuspended } : c))
+      );
+    }
+    return success;
+  };
+
+  const adminVerifyCandidateSkills = async (candidateId: string, skills: string[]): Promise<boolean> => {
+    const success = await SupabaseService.verifyCandidateSkills(candidateId, skills, authUser?.id || "admin");
+    if (success) {
+      setAllCandidates((prev) =>
+        prev.map((c) => (c.id === candidateId ? { ...c, skills } : c))
+      );
+    }
+    return success;
+  };
+
+  const adminResetCandidatePreferences = async (candidateId: string): Promise<boolean> => {
+    const success = await SupabaseService.resetLearnedPreferences(candidateId, authUser?.id || "admin");
+    if (success) {
+      setAllCandidates((prev) =>
+        prev.map((c) =>
+          c.id === candidateId
+            ? {
+                ...c,
+                learnedPreferences: {
+                  swipesCount: 0,
+                  dislikedSkills: [],
+                  preferredSkills: [],
+                  preferredLocations: [],
+                  preferredWorkModes: [],
+                },
+              }
+            : c
+        )
+      );
+    }
+    return success;
+  };
+
+  const adminDeleteCandidate = async (candidateId: string): Promise<boolean> => {
+    const success = await SupabaseService.deleteCandidate(candidateId, authUser?.id || "admin");
+    if (success) {
+      setAllCandidates((prev) => prev.filter((c) => c.id !== candidateId));
+      setApplications((prev) => prev.filter((a) => a.candidateId !== candidateId));
+    }
+    return success;
+  };
+
+  const adminVerifyCompany = async (companyId: string, isVerified: boolean): Promise<boolean> => {
+    const success = await SupabaseService.toggleCompanyVerification(companyId, isVerified, authUser?.id || "admin");
+    if (success) {
+      if (company.id === companyId) {
+        setCompany((prev) => ({ ...prev, isVerified }));
+      }
+    }
+    return success;
+  };
+
+  const adminSuspendCompany = async (companyId: string, isSuspended: boolean): Promise<boolean> => {
+    const success = await SupabaseService.suspendCompany(companyId, isSuspended, authUser?.id || "admin");
+    if (success) {
+      if (company.id === companyId) {
+        setCompany((prev) => ({ ...prev, isSuspended }));
+      }
+    }
+    return success;
+  };
+
+  const adminUpdateJobStatus = async (
+    jobId: string,
+    status: Job["status"],
+    isFeatured?: boolean
+  ): Promise<boolean> => {
+    const success = await SupabaseService.updateJobStatus(jobId, status, isFeatured, authUser?.id || "admin");
+    if (success) {
+      setJobs((prev) =>
+        prev.map((j) =>
+          j.id === jobId
+            ? { ...j, status, ...(isFeatured !== undefined ? { isFeatured } : {}) }
+            : j
+        )
+      );
+    }
+    return success;
+  };
+
+  const adminDeleteJob = async (jobId: string): Promise<boolean> => {
+    const success = await SupabaseService.deleteJob(jobId, authUser?.id || "admin");
+    if (success) {
+      setJobs((prev) => prev.filter((j) => j.id !== jobId));
+      setApplications((prev) => prev.filter((a) => a.jobId !== jobId));
+    }
+    return success;
   };
 
   const sessionSeqRef = useRef<number>(0);
@@ -2127,7 +2362,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setAuthStatus("AUTHENTICATED_CANDIDATE");
         safeStorage.setItem("swipehired_role", "candidate");
         if (profileResult.candidateProfile) {
-          setCandidate(profileResult.candidateProfile);
+          let cand = profileResult.candidateProfile;
+          const ghUsername =
+            session.user.user_metadata?.user_name ||
+            session.user.user_metadata?.preferred_username;
+          if (ghUsername && (!cand.githubData || !cand.githubData.connected)) {
+            try {
+              const ghData = await GitHubService.buildCandidateGitHubProfile(ghUsername);
+              cand = { ...cand, githubData: ghData };
+              await SupabaseService.saveCandidate(cand);
+            } catch (ghErr) {
+              console.warn("[AppContext] GitHub auto-sync notice:", ghErr);
+            }
+          }
+          setCandidate(cand);
         }
 
         // Check if view needs to be routed to candidate workspace
@@ -2152,7 +2400,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setRole("admin");
         setAuthStatus("AUTHENTICATED_ADMIN");
         safeStorage.setItem("swipehired_role", "admin");
-        setActiveView("admin-overview");
+        setActiveView("landing");
       } else {
         setRole(null);
         setAuthStatus("ROLE_UNSET");
@@ -2308,7 +2556,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
     } else if (resolvedRole === "admin") {
       setAuthStatus("AUTHENTICATED_ADMIN");
-      setActiveView("admin-overview");
+      setActiveView("landing");
     } else {
       setAuthStatus("ROLE_UNSET");
       setActiveView("auth-select");
@@ -2326,6 +2574,48 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return { error: res.error };
     }
     return {};
+  };
+
+  // Sign in / Sign up with GitHub OAuth (Candidate Only)
+  const authSignInWithGitHub = async (
+    role: "candidate" = "candidate"
+  ): Promise<{ error?: string }> => {
+    const res = await SupabaseService.signInWithGitHub(role);
+    if (res.error) {
+      return { error: res.error };
+    }
+    return {};
+  };
+
+  // Connect GitHub profile to Candidate and sync telemetry
+  const connectCandidateGitHub = async (
+    username: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const gitHubData = await GitHubService.buildCandidateGitHubProfile(username);
+      const updatedCandidate: CandidateProfile = {
+        ...candidate,
+        githubData: gitHubData,
+      };
+
+      // If candidate has no projects, import top 3 GitHub repos as projects
+      if ((!candidate.projects || candidate.projects.length === 0) && gitHubData.topRepos.length > 0) {
+        updatedCandidate.projects = gitHubData.topRepos.slice(0, 3).map((r) => ({
+          id: `gh_${r.id}`,
+          name: r.name,
+          description: r.description || "Open source project on GitHub",
+          technologies: [r.language].filter(Boolean),
+          link: r.htmlUrl,
+        }));
+      }
+
+      setCandidate(updatedCandidate);
+      safeStorage.setJSON("swipehired_candidate", updatedCandidate);
+      await SupabaseService.saveCandidate(updatedCandidate);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || "Failed to fetch GitHub profile." };
+    }
   };
 
   // Sign out
@@ -2361,6 +2651,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setActiveView("landing");
   };
 
+  // Support Mode Exit
+  const exitSupportMode = useCallback(async () => {
+    try {
+      const current = SupportSessionClient.get();
+      if (current?.token || current?.session?.id) {
+        await fetch("/api/support-session/end", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            token: current.token,
+            sessionId: current.session?.id,
+          }),
+        }).catch(console.warn);
+      }
+    } finally {
+      SupportSessionClient.clear();
+      setSupportSession(null);
+      // Cleanly leave support mode and return to admin portal
+      window.location.href = "http://localhost:3001";
+    }
+  }, []);
+
   // Log Out
   const logout = () => {
     authSignOut();
@@ -2378,6 +2690,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         authSignUp,
         authSignIn,
         authSignInWithGoogle,
+        authSignInWithGitHub,
+        connectCandidateGitHub,
         resendConfirmationEmail,
         authSignOut,
         role,
@@ -2425,7 +2739,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         submitTalentBid,
         respondToTalentBid,
         companyRespondToCounterOffer,
-        simulateCandidateCounterOffer,
         companySLAs,
         requestConstructiveFeedback,
         swipes,
@@ -2450,6 +2763,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         sendEmailFromCompany,
         adminReports,
         resolveAdminReport,
+        adminSuspendCandidate,
+        adminVerifyCandidateSkills,
+        adminResetCandidatePreferences,
+        adminDeleteCandidate,
+        adminVerifyCompany,
+        adminSuspendCompany,
+        adminUpdateJobStatus,
+        adminDeleteJob,
+        supportSession,
+        exitSupportMode,
         triggerCelebration,
         logout,
       }}

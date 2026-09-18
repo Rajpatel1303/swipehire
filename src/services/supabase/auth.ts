@@ -248,6 +248,43 @@ export class AuthService {
   }
 
   /**
+   * Supabase Auth: Sign In / Sign Up with GitHub OAuth (Candidate Only)
+   */
+  static async signInWithGitHub(
+    role: "candidate" = "candidate"
+  ): Promise<{ error: string | null }> {
+    try {
+      safeStorage.setItem("swipehired_oauth_role", role);
+      if (typeof window !== "undefined") {
+        try {
+          sessionStorage.setItem("swipehired_oauth_role", role);
+          document.cookie = `swipehired_oauth_role=${role}; path=/; max-age=600; SameSite=Lax`;
+        } catch {}
+      }
+
+      const redirectTo =
+        typeof window !== "undefined" && window.location
+          ? `${window.location.origin}/?oauth_role=${role}&oauth_provider=github`
+          : undefined;
+
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "github",
+        options: {
+          redirectTo,
+          scopes: "read:user user:email",
+        },
+      });
+
+      if (error) {
+        return { error: error.message };
+      }
+      return { error: null };
+    } catch (err: any) {
+      return { error: err.message || "Failed to initiate GitHub sign-in." };
+    }
+  }
+
+  /**
    * Supabase Auth: Fetch or Auto-Provision Profile from Supabase User
    * Authoritative Source of Truth: public.profiles table
    */
@@ -390,6 +427,7 @@ export class AuthService {
             commissionAgreementDocId: c.commission_agreement_doc_id || undefined,
             commissionAgreementSignature: c.commission_agreement_signature || undefined,
             learnedPreferences: c.learned_preferences || undefined,
+            githubData: (c.github_data as any) || undefined,
           };
         } else {
           const candidateId = `cand_${user.id.substring(0, 8)}`;

@@ -46,6 +46,12 @@ export class MarketplaceService {
    */
   static async saveBlindTalentProfile(profile: BlindTalentProfile): Promise<boolean> {
     try {
+      const { data: existing } = await supabase
+        .from("blind_talent_profiles")
+        .select("*")
+        .eq("id", profile.id)
+        .maybeSingle();
+
       const { error } = await supabase.from("blind_talent_profiles").upsert({
         id: profile.id,
         candidate_id: profile.candidateId,
@@ -70,12 +76,15 @@ export class MarketplaceService {
         return false;
       }
 
+      const action = profile.isListed ? "blind_profile_listed" : "blind_profile_unlisted";
       await AuditService.log({
-        actorId: profile.candidateId,
         actorRole: "candidate",
-        action: profile.isListed ? "publish_blind_pitch" : "pause_blind_pitch",
+        targetUserId: profile.candidateId,
+        action,
         entityType: "bid",
         entityId: profile.id,
+        oldData: existing ? { isListed: existing.is_listed, headline: existing.headline } : {},
+        newData: { isListed: profile.isListed, headline: profile.headline },
         metadata: { handle: profile.anonymousHandle, isListed: profile.isListed },
       });
 
@@ -143,6 +152,12 @@ export class MarketplaceService {
    */
   static async saveTalentBid(bid: TalentBid): Promise<boolean> {
     try {
+      const { data: existing } = await supabase
+        .from("talent_bids")
+        .select("*")
+        .eq("id", bid.id)
+        .maybeSingle();
+
       const enrichedCounterDetails = bid.counterOfferDetails
         ? {
             ...bid.counterOfferDetails,
@@ -157,55 +172,53 @@ export class MarketplaceService {
         blind_talent_id: bid.blindTalentId,
         candidate_id: bid.candidateId,
         company_id: bid.companyId,
-        job_id: bid.jobId,
+        job_id: bid.jobId || null,
         job_title: bid.jobTitle,
         seniority_tier: bid.seniorityTier,
         salary_offer: bid.salaryOffer,
-        bonus_and_equity: bid.bonusAndEquity,
+        bonus_and_equity: bid.bonusAndEquity || null,
         work_mode: bid.workMode,
-        pitch_message: bid.pitchMessage,
-        perks: bid.perks,
+        pitch_message: bid.pitchMessage || "",
+        perks: bid.perks || [],
         status: bid.status,
-        candidate_revealed_name: bid.candidateRevealedName,
-        candidate_revealed_email: bid.candidateRevealedEmail,
-        candidate_revealed_phone: bid.candidateRevealedPhone,
-        candidate_revealed_photo: bid.candidateRevealedPhoto,
+        candidate_revealed_name: bid.candidateRevealedName || null,
+        candidate_revealed_email: bid.candidateRevealedEmail || null,
+        candidate_revealed_phone: bid.candidateRevealedPhone || null,
+        candidate_revealed_photo: bid.candidateRevealedPhoto || null,
         counter_offer_details: enrichedCounterDetails as any,
-        company_counter_details: bid.companyCounterDetails as any,
+        company_counter_details: (bid.companyCounterDetails || null) as any,
         last_action_by: bid.lastActionBy || null,
-        negotiation_history: bid.negotiationHistory as any,
+        negotiation_history: (bid.negotiationHistory || []) as any,
         expires_at: bid.expiresAt,
         created_at: bid.createdAt || new Date().toISOString(),
       };
 
-      let error: any = null;
-      if (bid.id) {
-        const updateRes = await (supabase.from("talent_bids") as any)
-          .update(payload)
-          .eq("id", bid.id)
-          .select("id");
-        if (!updateRes.error && updateRes.data && updateRes.data.length > 0) {
-          error = null;
-        } else {
-          const upsertRes = await (supabase.from("talent_bids") as any).upsert(payload);
-          error = upsertRes.error;
-        }
-      } else {
-        const upsertRes = await (supabase.from("talent_bids") as any).upsert(payload);
-        error = upsertRes.error;
-      }
+      const upsertRes = await (supabase.from("talent_bids") as any).upsert(payload, { onConflict: "id" });
+      const error = upsertRes.error;
 
       if (error) {
-        console.warn("[MarketplaceService] Failed to save talent bid:", error.message);
+        console.error("[MarketplaceService] Failed to save talent bid:", error.message, error);
         return false;
       }
 
+      // Determine authoritative bid action
+      let action = "talent_bid_created";
+      if (existing) {
+        if (bid.status === "countered") action = "talent_bid_countered";
+        else if (bid.status === "accepted") action = "talent_bid_accepted";
+        else if (bid.status === "declined") action = "talent_bid_declined";
+        else action = "talent_bid_updated";
+      }
+
       await AuditService.log({
-        actorId: bid.companyId,
-        actorRole: "company",
-        action: `talent_bid_${bid.status}`,
+        actorRole: bid.lastActionBy === "candidate" ? "candidate" : "company",
+        companyId: bid.companyId,
+        targetUserId: bid.candidateId,
+        action,
         entityType: "bid",
         entityId: bid.id,
+        oldData: existing ? { status: existing.status, salaryOffer: existing.salary_offer } : {},
+        newData: { status: bid.status, salaryOffer: bid.salaryOffer, jobTitle: bid.jobTitle },
         metadata: { candidateId: bid.candidateId, status: bid.status, salaryOffer: bid.salaryOffer },
       });
 
