@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "swipehire",
-  "account_id": "feb41f6b6d205c285458799b46aca29d",
+  "account_id": "1f89862be3380cf7733e4eb50843b160",
   "main": "src/worker.ts",
   "compatibility_date": "2026-08-20",
   "compatibility_flags": ["nodejs_compat"],

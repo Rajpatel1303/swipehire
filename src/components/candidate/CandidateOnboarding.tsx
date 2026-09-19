@@ -78,8 +78,7 @@ export const CandidateOnboarding: React.FC = () => {
       setActiveView("candidate-review");
     } catch (err: any) {
       console.error("Resume processing error:", err);
-      setErrorMsg("AI extraction encountered an issue reading the document format. Proceeding to manual review.");
-      setActiveView("candidate-review");
+      setErrorMsg(err?.message || "AI extraction encountered an issue reading the document format. Please re-upload or proceed to manual review.");
     } finally {
       isProcessingRef.current = false;
       setIsProcessing(false);
@@ -119,9 +118,18 @@ export const CandidateOnboarding: React.FC = () => {
         </div>
 
         {errorMsg && (
-          <div className="p-3 rounded-2xl bg-amber-50 text-amber-800 text-xs flex items-center gap-2 border border-amber-200 font-semibold">
-            <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
-            <span>{errorMsg}</span>
+          <div className="p-4 rounded-2xl bg-amber-50 text-amber-900 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-amber-200">
+            <div className="flex items-center gap-2 font-medium">
+              <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
+              <span>{errorMsg}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveView("candidate-review")}
+              className="px-3 py-1.5 rounded-xl bg-amber-200 hover:bg-amber-300 text-amber-900 font-bold shrink-0 transition-colors cursor-pointer text-center"
+            >
+              Fill Manually &rarr;
+            </button>
           </div>
         )}
 

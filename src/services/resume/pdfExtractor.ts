@@ -144,7 +144,8 @@ export class PdfExtractor {
       const spanningItems = items.filter(it => !leftItems.includes(it) && !rightItems.includes(it));
 
       // Header/spanning items on top, then left column, then right column
-      const headerItems = spanningItems.filter(it => it.y > Math.max(...leftItems.map(l => l.y), 0) - 50);
+      const maxLeftY = leftItems.length > 0 ? Math.max(...leftItems.map(l => l.y)) : 0;
+      const headerItems = spanningItems.filter(it => it.y > maxLeftY - 50);
       const remainingLeft = [...leftItems, ...spanningItems.filter(it => !headerItems.includes(it) && it.x < twoColumnSplit)];
       const remainingRight = [...rightItems, ...spanningItems.filter(it => !headerItems.includes(it) && it.x >= twoColumnSplit)];
 

@@ -29,27 +29,48 @@ export class ResumeParser {
         }
 
         // 1. Browser-first extraction (dynamically loaded to keep initial landing page bundle lightweight)
-        const { BrowserResumeParser } = await import("../resume/browserResumeParser");
-        const extractionResult = await BrowserResumeParser.parse(file, onProgress);
-        clientExtractedText = extractionResult.cleanedText;
+        let extractionResult: any = null;
+        try {
+          const { BrowserResumeParser } = await import("../resume/browserResumeParser");
+          extractionResult = await BrowserResumeParser.parse(file, onProgress);
+          clientExtractedText = extractionResult?.cleanedText || "";
+        } catch (clientErr) {
+          console.warn("[ResumeParser] Client browser PDF extraction failed, attempting server extraction:", clientErr);
+        }
 
-        const aiPayload: AIResumePayload = BrowserResumeParser.toAIPayload(extractionResult, candidateName);
-
-        // 2. Dispatch to Cloudflare Workers AI Gemma 4 backend
+        // 2. Dispatch to backend AI (with Dual-Pass: JSON if client extracted text, FormData file if client failed)
         if (onProgress) {
           onProgress("sending-to-ai", "Cloudflare Workers AI (Google Gemma 4) structuring candidate profile...", 85);
         }
 
-        const response = await fetch("/api/ai/parse-resume", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            fullText: extractionResult.cleanedText,
-            payload: aiPayload,
-            candidateName,
-            fileName: resolvedName,
-          }),
-        });
+        let response: Response;
+        if (clientExtractedText && clientExtractedText.trim().length >= 80) {
+          const { BrowserResumeParser } = await import("../resume/browserResumeParser");
+          const aiPayload = BrowserResumeParser.toAIPayload(extractionResult, candidateName);
+
+          response = await fetch("/api/ai/parse-resume", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              fullText: clientExtractedText,
+              payload: aiPayload,
+              candidateName,
+              fileName: resolvedName,
+            }),
+          });
+        } else {
+          // Dual-pass server fallback: upload file directly
+          const formData = new FormData();
+          formData.append("file", file);
+          if (candidateName) formData.append("candidateName", candidateName);
+          formData.append("fileName", resolvedName);
+          if (clientExtractedText) formData.append("fullText", clientExtractedText);
+
+          response = await fetch("/api/ai/parse-resume", {
+            method: "POST",
+            body: formData,
+          });
+        }
 
         if (response.ok) {
           if (onProgress) {
@@ -169,9 +190,9 @@ export class ResumeParser {
     const textLower = resumeText.toLowerCase();
     const skillsFound: string[] = [];
     const possibleSkills = [
-      "React", "Node.js", "TypeScript", "JavaScript", "Python", "Tailwind CSS",
+      "React", "React Native", "Node.js", "TypeScript", "JavaScript", "Python", "Tailwind CSS",
       "PostgreSQL", "MongoDB", "Express", "Next.js", "GraphQL", "Docker", "AWS", "Git", "Figma", "Redux", "Flutter", "Golang",
-      "C++", "C#", ".NET", "Java", "Kubernetes", "Redis", "Vue.js", "Angular",
+      "C++", "C#", ".NET", "Java", "Kubernetes", "Redis", "Vue.js", "Angular", "HTML", "CSS", "SQL",
       "Accounting", "Financial Management", "Auditing", "GST", "Tally", "Excel", "Corporate Finance"
     ];
 
@@ -184,12 +205,58 @@ export class ResumeParser {
     const emailMatch = resumeText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
     const phoneMatch = resumeText.match(/(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/);
 
-    const firstLine = resumeText.split("\n")[0]?.trim() || "";
-    const extractedName = (!firstLine.includes("@") && !/\d/.test(firstLine) && firstLine.length < 50 && firstLine.length > 2)
-      ? firstLine
-      : (candidateName || "Candidate");
+    const lines = resumeText.split("\n").map(l => l.trim()).filter(Boolean);
+    let extractedName = candidateName || "";
+    if (!extractedName || extractedName.toLowerCase() === "candidate") {
+      for (const line of lines.slice(0, 8)) {
+        if (
+          line.length >= 3 &&
+          line.length <= 40 &&
+          !line.includes("@") &&
+          !/\d/.test(line) &&
+          !/(-yax|-yaksh|village|taluka|district|gujarat|india|street|road|resume|curriculum|profile|contact)/i.test(line) &&
+          !/^(contact|summary|skills|education|experience|projects)/i.test(line)
+        ) {
+          extractedName = line;
+          break;
+        }
+      }
+    }
+    if (!extractedName) extractedName = "Candidate";
 
-    const headline = skillsFound.length > 0 ? `${skillsFound[0]} Developer` : "Software Engineer";
+    // Extract education
+    const education: Array<{ degree: string; institution: string; year: string }> = [];
+    const eduRegex = /(b\.?tech|b\.?e\.?|bachelor|master|m\.?tech|m\.?e\.?|bca|mca|b\.?sc|m\.?sc|mba|ph\.?d|diploma)/i;
+    lines.forEach(line => {
+      if (eduRegex.test(line) && line.length < 120) {
+        const yearMatch = line.match(/\b(19\d\d|20\d\d)\b/);
+        education.push({
+          degree: line.replace(/\b(19\d\d|20\d\d)\b.*$/, "").trim(),
+          institution: "University / College",
+          year: yearMatch ? yearMatch[0] : "",
+        });
+      }
+    });
+
+    // Extract experience
+    const experience: Array<{ title: string; company: string; duration: string; description: string }> = [];
+    const roleRegex = /(developer|engineer|lead|architect|manager|intern|consultant|analyst|specialist|designer)/i;
+    lines.forEach((line, idx) => {
+      if (roleRegex.test(line) && line.length < 80 && !line.toLowerCase().includes("skills")) {
+        const durationMatch = line.match(/\b(20\d\d\s*[-–to]\s*(?:present|current|20\d\d)|\d+\s*(?:years?|months?))\b/i);
+        const nextDesc = lines[idx + 1] && lines[idx + 1].length > 15 ? lines[idx + 1] : "Engineering delivery and key feature contributions.";
+        experience.push({
+          title: line.replace(/\b(20\d\d.*)$/, "").trim(),
+          company: "Engineering Team",
+          duration: durationMatch ? durationMatch[0] : "Recent",
+          description: nextDesc,
+        });
+      }
+    });
+
+    const headline = skillsFound.length > 0 ? `${skillsFound[0]} Developer` : (experience[0]?.title || "Software Engineer");
+    const yoe = Math.min(Math.max(experience.length, 1), 10);
+    const expectedSalary = yoe <= 1 ? "₹4–7 LPA" : yoe <= 3 ? "₹7–11 LPA" : yoe <= 6 ? "₹12–18 LPA" : "₹20–30 LPA";
 
     return {
       fullName: extractedName,
@@ -198,16 +265,16 @@ export class ResumeParser {
       phone: phoneMatch ? phoneMatch[0] : "",
       location: "",
       workPreference: "Hybrid",
-      yearsOfExperience: 1,
-      skills: skillsFound,
-      possibleRoles: [headline],
-      education: [],
-      experience: [],
+      yearsOfExperience: yoe,
+      skills: skillsFound.length > 0 ? skillsFound : ["Software Engineering", "Problem Solving"],
+      possibleRoles: [headline, "Software Engineer"],
+      education: education.slice(0, 3),
+      experience: experience.slice(0, 4),
       projects: [],
       certifications: [],
-      expectedSalary: "₹4–7 LPA",
+      expectedSalary,
       preferredRole: headline,
-      bio: "",
+      bio: `${extractedName} is a developer with background in ${skillsFound.slice(0, 3).join(", ") || "modern tech stack"}.`,
     };
   }
 }
