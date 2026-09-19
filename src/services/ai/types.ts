@@ -15,6 +15,8 @@ export interface ParsedResumeResult {
   expectedSalary?: string;
   preferredRole?: string;
   bio?: string;
+  confidence?: Record<string, number>;
+  verificationFlags?: string[];
 }
 
 export interface GeneratedJobResult {

@@ -1,5 +1,6 @@
 import { ParsedResumeResult } from "./types";
 import type { ParsingProgressCallback, AIResumePayload } from "../resume";
+import { ResumeVerifier } from "../resume/resumeVerifier";
 
 export class ResumeParser {
   /**
@@ -363,7 +364,7 @@ export class ResumeParser {
       }
     }
 
-    return {
+    const rawSanitized: ParsedResumeResult = {
       fullName,
       headline,
       email: data?.email || "",
@@ -382,6 +383,13 @@ export class ResumeParser {
       expectedSalary: salary,
       preferredRole: data?.preferredRole || headline,
       bio: data?.bio || heuristic.summary || `${fullName} is an experienced professional specializing in ${skills.slice(0, 3).join(", ") || "modern engineering"}.`,
+    };
+
+    const verifiedPackage = ResumeVerifier.verify(rawSanitized, rawResumeText || "");
+    return {
+      ...verifiedPackage.verifiedProfile,
+      confidence: verifiedPackage.confidence,
+      verificationFlags: verifiedPackage.verificationFlags,
     };
   }
 
