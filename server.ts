@@ -41,9 +41,10 @@ async function callEdenAIGemma4(systemInstruction: string, userPrompt: string, r
         body: JSON.stringify({
           model: "google/gemma-4-31b-it",
           messages: [
-            { role: "user", content: `${systemInstruction}\n\n${userPrompt}` },
+            { role: "system", content: systemInstruction },
+            { role: "user", content: userPrompt },
           ],
-          max_tokens: 2500,
+          max_tokens: 1500,
           temperature: 0.1,
         }),
         signal: controller.signal,
@@ -525,6 +526,193 @@ Extract all candidate details into this exact JSON schema:
         sanitizedText,
         candidateName
       );
+      // Helper for section-aware heuristic parsing
+      const extractServerHeuristicSections = (fullText: string) => {
+        const textLines = (fullText || "").split("\n").map((l: string) => l.trim()).filter(Boolean);
+        const sections: Record<string, string[]> = {
+          education: [],
+          experience: [],
+          projects: [],
+          skills: [],
+          summary: [],
+          other: [],
+        };
+        let curr = "other";
+        const headers = [
+          { type: "education", regex: /^(?:##\s*)?(?:education|academic|qualifications|degrees?)\b/i },
+          { type: "experience", regex: /^(?:##\s*)?(?:experience|work experience|professional experience|employment history|work history)\b/i },
+          { type: "projects", regex: /^(?:##\s*)?(?:projects|key projects|personal projects|featured projects|portfolio)\b/i },
+          { type: "skills", regex: /^(?:##\s*)?(?:skills|technical skills|technologies|core competencies|tools)\b/i },
+          { type: "summary", regex: /^(?:##\s*)?(?:summary|professional summary|about me|profile|objective)\b/i },
+        ];
+        for (const line of textLines) {
+          const m = headers.find(h => h.regex.test(line));
+          if (m && line.length < 50) {
+            curr = m.type;
+            continue;
+          }
+          sections[curr].push(line);
+        }
+
+        // Education
+        const eduList: Array<{ degree: string; institution: string; year: string }> = [];
+        const eLines = sections.education.length > 0 ? sections.education : textLines;
+        const dRegex = /\b(b\.?tech|b\.?e\.?|bachelor|master|m\.?tech|m\.?e\.?|bca|mca|b\.?sc|m\.?sc|mba|ph\.?d|diploma|higher secondary|senior secondary|12th|10th)\b/i;
+        for (let i = 0; i < eLines.length; i++) {
+          const l = eLines[i];
+          if (dRegex.test(l) && l.length < 120) {
+            const yr = l.match(/\b(19\d\d|20\d\d)(?:\s*[-–to]\s*(?:19\d\d|20\d\d|present))?\b/i);
+            let inst = "";
+            if (eLines[i + 1] && !dRegex.test(eLines[i + 1]) && eLines[i + 1].length < 100) {
+              inst = eLines[i + 1].replace(/\b(19\d\d|20\d\d).*$/, "").replace(/^[|\-•\s]+/, "").trim();
+            }
+            eduList.push({
+              degree: l.replace(/\b(19\d\d|20\d\d).*$/, "").replace(/[|•,].*$/, "").trim(),
+              institution: inst || "University / Institute",
+              year: yr ? yr[0] : (eLines[i + 1]?.match(/\b(19\d\d|20\d\d)\b/)?.[0] || ""),
+            });
+          }
+        }
+
+        // Experience
+        const expList: Array<{ title: string; company: string; duration: string; description: string }> = [];
+        const exLines = sections.experience.length > 0 ? sections.experience : textLines;
+        const rRegex = /\b(developer|engineer|lead|architect|manager|intern|consultant|analyst|specialist|designer|programmer|administrator)\b/i;
+        const dtRegex = /\b((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|20\d\d|19\d\d)[a-z0-9\s]*[-–to]\s*(?:present|current|today|20\d\d|19\d\d|\w+))\b/i;
+        for (let i = 0; i < exLines.length; i++) {
+          const l = exLines[i];
+          if (rRegex.test(l) && l.length < 100 && !l.toLowerCase().includes("skills")) {
+            const dur = l.match(dtRegex) || exLines[i + 1]?.match(dtRegex);
+            const comp = l.split(/[|–\-@]/)[1] || exLines[i + 1]?.split(/[|–\-@]/)[0] || "Tech Company";
+            const dLines: string[] = [];
+            for (let j = i + 1; j < Math.min(i + 4, exLines.length); j++) {
+              if (rRegex.test(exLines[j]) && exLines[j].length < 80) break;
+              if (exLines[j].startsWith("-") || exLines[j].startsWith("•") || exLines[j].length > 25) {
+                dLines.push(exLines[j].replace(/^[-•*]\s*/, ""));
+              }
+            }
+            expList.push({
+              title: l.split(/[|–\-@]/)[0].trim(),
+              company: comp.replace(dtRegex, "").replace(/[|–\-]/g, "").trim() || "Tech Company",
+              duration: dur ? dur[0].trim() : "Recent",
+              description: dLines.slice(0, 2).join(". ") || "Core engineering and software development responsibilities.",
+            });
+          }
+        }
+
+        // Projects
+        const prList: Array<{ name: string; description: string; technologies: string[] }> = [];
+        const pLines = sections.projects.length > 0 ? sections.projects : textLines;
+        for (let i = 0; i < pLines.length; i++) {
+          const l = pLines[i];
+          const isBulletOrHeader = /^[-•*]\s*[A-Z0-9]/i.test(l) || (sections.projects.length > 0 && !l.startsWith("-") && l.length < 70 && !l.includes("@"));
+          if (isBulletOrHeader && l.length > 3 && l.length < 90) {
+            const cleanName = l.replace(/^[-•*]\s*/, "").split(/[:|\-–]/)[0].trim();
+            const descPart = l.split(/[:|\-–]/).slice(1).join(" ").trim() || (pLines[i + 1] && pLines[i + 1].length > 15 ? pLines[i + 1].replace(/^[-•*]\s*/, "") : "Full-stack application development and system architecture.");
+            if (cleanName && cleanName.length >= 2 && !rRegex.test(cleanName) && !dRegex.test(cleanName)) {
+              prList.push({
+                name: cleanName,
+                description: descPart,
+                technologies: [],
+              });
+            }
+          }
+        }
+
+        // Skills
+        const tLower = (fullText || "").toLowerCase();
+        const skillCatalog = [
+          "React", "React Native", "TypeScript", "JavaScript", "Node.js", "Express", "Python", "Django", "Flask",
+          "FastAPI", "Next.js", "Vue.js", "Angular", "Tailwind CSS", "HTML", "CSS", "SQL", "PostgreSQL",
+          "MongoDB", "MySQL", "Redis", "GraphQL", "REST APIs", "Docker", "Kubernetes", "AWS", "Azure", "GCP",
+          "Git", "GitHub", "CI/CD", "Linux", "Java", "Spring Boot", "C++", "C#", ".NET", "Golang", "Rust",
+          "PHP", "Laravel", "Figma", "Redux", "Zustand", "Jest", "Cypress", "Machine Learning", "AI", "NLP"
+        ];
+        const mSkills = skillCatalog.filter(s => tLower.includes(s.toLowerCase()));
+
+        return {
+          education: eduList.slice(0, 4),
+          experience: expList.slice(0, 5),
+          projects: prList.slice(0, 5),
+          skills: mSkills,
+          summary: sections.summary.join(" ") || "",
+        };
+      };
+
+      const heuristicFallback = extractServerHeuristicSections(sanitizedText);
+
+      // Polymorphic Education
+      let rawEdu = extracted?.education;
+      if (rawEdu && !Array.isArray(rawEdu) && typeof rawEdu === "object") {
+        rawEdu = [rawEdu];
+      }
+      let finalEducation: Array<{ degree: string; institution: string; year: string }> = (Array.isArray(rawEdu) ? rawEdu : [])
+        .map((e: any) => {
+          if (typeof e === "string") return { degree: e.trim(), institution: "University / Institute", year: "" };
+          const degree = String(e?.degree || e?.major || e?.title || e?.course || e?.qualification || "").trim();
+          const institution = String(e?.institution || e?.university || e?.college || e?.school || e?.institute || "").trim();
+          const year = String(e?.year || e?.graduation_year || e?.duration || e?.period || e?.dates || "").trim();
+          return { degree, institution: institution || "University / Institute", year };
+        })
+        .filter((e: any) => e.degree || e.institution);
+      if (finalEducation.length === 0 && heuristicFallback.education.length > 0) {
+        finalEducation = heuristicFallback.education;
+      }
+
+      // Polymorphic Experience
+      let rawExp = extracted?.experience;
+      if (rawExp && !Array.isArray(rawExp) && typeof rawExp === "object") {
+        rawExp = [rawExp];
+      }
+      let finalExperience: Array<{ title: string; company: string; duration: string; description: string }> = (Array.isArray(rawExp) ? rawExp : [])
+        .map((exp: any) => {
+          if (typeof exp === "string") return { title: exp.trim(), company: "Tech Company", duration: "Recent", description: "Software development responsibilities." };
+          const title = String(exp?.title || exp?.role || exp?.position || exp?.jobTitle || exp?.designation || "").trim();
+          const company = String(exp?.company || exp?.organization || exp?.employer || exp?.workplace || "").trim();
+          const duration = String(exp?.duration || exp?.period || exp?.dates || exp?.date_range || exp?.years || "Recent").trim();
+          let description = exp?.description || exp?.summary || exp?.responsibilities || "";
+          if (Array.isArray(description)) description = description.join(". ");
+          return { title, company: company || "Tech Company", duration, description: String(description).trim() };
+        })
+        .filter((exp: any) => exp.title || exp.company);
+      if (finalExperience.length === 0 && heuristicFallback.experience.length > 0) {
+        finalExperience = heuristicFallback.experience;
+      }
+
+      // Polymorphic Projects
+      let rawProj = extracted?.projects;
+      if (rawProj && !Array.isArray(rawProj) && typeof rawProj === "object") {
+        rawProj = [rawProj];
+      }
+      let finalProjects: Array<{ name: string; description: string; technologies: string[] }> = (Array.isArray(rawProj) ? rawProj : [])
+        .map((p: any) => {
+          if (typeof p === "string") {
+            return { name: p.trim(), description: "Software engineering and implementation.", technologies: [] };
+          }
+          const name = String(p?.name || p?.title || p?.projectName || p?.project_name || "").trim();
+          const description = String(p?.description || p?.summary || p?.details || "Application architecture and development.").trim();
+          let technologies = p?.technologies || p?.tech_stack || p?.tools || p?.skills || [];
+          if (typeof technologies === "string") {
+            technologies = technologies.split(/[,|/]/).map((t: string) => t.trim()).filter(Boolean);
+          }
+          return {
+            name,
+            description,
+            technologies: Array.isArray(technologies) ? technologies.map((t: any) => String(t).trim()).filter(Boolean) : []
+          };
+        })
+        .filter((p: any) => p.name);
+      if (finalProjects.length === 0 && heuristicFallback.projects.length > 0) {
+        finalProjects = heuristicFallback.projects;
+      }
+
+      // Skills
+      let finalSkills: string[] = Array.isArray(extracted?.skills)
+        ? Array.from(new Set(extracted.skills.map((s: any) => String(s).trim()).filter(Boolean)))
+        : [];
+      if (finalSkills.length === 0 && heuristicFallback.skills.length > 0) {
+        finalSkills = heuristicFallback.skills;
+      }
 
       const sanitizedCandidate = {
         fullName: finalFullName,
@@ -536,36 +724,13 @@ Extract all candidate details into this exact JSON schema:
           ? extracted.workPreference
           : "Hybrid",
         yearsOfExperience: yoe,
-        skills: Array.isArray(extracted?.skills)
-          ? Array.from(new Set(extracted.skills.map((s: any) => String(s).trim()).filter(Boolean)))
-          : [],
+        skills: finalSkills.length > 0 ? finalSkills : ["Software Engineering", "Problem Solving"],
         possibleRoles: Array.isArray(extracted?.possibleRoles) && extracted.possibleRoles.length > 0
           ? extracted.possibleRoles.map((r: any) => String(r).trim()).filter(Boolean)
           : [inferredHeadline],
-        education: Array.isArray(extracted?.education)
-          ? extracted.education.map((e: any) => ({
-              degree: String(e?.degree || "").trim(),
-              institution: String(e?.institution || "").trim(),
-              year: String(e?.year || "").trim(),
-            })).filter((e: any) => e.degree || e.institution)
-          : [],
-        experience: Array.isArray(extracted?.experience)
-          ? extracted.experience.map((exp: any) => ({
-              title: String(exp?.title || "").trim(),
-              company: String(exp?.company || "").trim(),
-              duration: String(exp?.duration || "").trim(),
-              description: String(exp?.description || "").trim(),
-            })).filter((exp: any) => exp.title || exp.company)
-          : [],
-        projects: Array.isArray(extracted?.projects)
-          ? extracted.projects.map((p: any) => ({
-              name: String(p?.name || "").trim(),
-              description: String(p?.description || "").trim(),
-              technologies: Array.isArray(p?.technologies)
-                ? p.technologies.map((t: any) => String(t).trim()).filter(Boolean)
-                : [],
-            })).filter((p: any) => p.name)
-          : [],
+        education: finalEducation,
+        experience: finalExperience,
+        projects: finalProjects,
         certifications: Array.isArray(extracted?.certifications)
           ? extracted.certifications.map((c: any) => String(c).trim()).filter(Boolean)
           : [],
@@ -573,7 +738,9 @@ Extract all candidate details into this exact JSON schema:
         preferredRole: typeof extracted?.preferredRole === "string" && extracted.preferredRole.trim().length > 0
           ? extracted.preferredRole.trim()
           : inferredHeadline,
-        bio: typeof extracted?.bio === "string" ? extracted.bio.trim() : "",
+        bio: typeof extracted?.bio === "string" && extracted.bio.trim().length > 0
+          ? extracted.bio.trim()
+          : (heuristicFallback.summary || `${finalFullName} is a motivated professional with expertise in ${finalSkills.slice(0, 3).join(", ") || "modern software engineering"}.`),
         languages: Array.isArray(extracted?.languages)
           ? extracted.languages.map((l: any) => String(l).trim()).filter(Boolean)
           : ["English"],
@@ -597,31 +764,18 @@ Extract all candidate details into this exact JSON schema:
         errorMessage: err.message,
       });
       await recordSystemError("ai", "high", "RESUME_PARSE_FAILED", err.message, { stackTrace: err.stack });
+
       // Resilient heuristic fallback that actually parses the document text
       const rawText = req.body?.fullText || req.body?.payload?.fullText || req.body?.resumeText || "";
-      const textLower = rawText.toLowerCase();
-
-      // Extract skills
-      const skillCatalog = [
-        "React", "React Native", "TypeScript", "JavaScript", "Node.js", "Express", "Python", "Django", "Flask",
-        "FastAPI", "Next.js", "Vue.js", "Angular", "Tailwind CSS", "HTML", "CSS", "SQL", "PostgreSQL",
-        "MongoDB", "MySQL", "Redis", "GraphQL", "REST APIs", "Docker", "Kubernetes", "AWS", "Azure", "GCP",
-        "Git", "GitHub", "CI/CD", "Linux", "Java", "Spring Boot", "C++", "C#", ".NET", "Golang", "Rust",
-        "PHP", "Laravel", "Figma", "Redux", "Zustand", "Jest", "Cypress", "Machine Learning", "AI", "NLP"
-      ];
-      const matchedSkills = skillCatalog.filter(s => textLower.includes(s.toLowerCase()));
-
-      // Extract contact details
+      const textLines = (rawText || "").split("\n").map((l: string) => l.trim()).filter(Boolean);
       const emailMatch = rawText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
       const phoneMatch = rawText.match(/(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/);
       const email = emailMatch ? emailMatch[0] : "";
       const phone = phoneMatch ? phoneMatch[0] : "";
 
-      // Extract human name
-      const lines = rawText.split("\n").map((l: string) => l.trim()).filter(Boolean);
       let extractedName = req.body?.candidateName || "";
       if (!extractedName || extractedName.toLowerCase() === "candidate") {
-        for (const line of lines.slice(0, 8)) {
+        for (const line of textLines.slice(0, 8)) {
           if (
             line.length >= 3 &&
             line.length <= 40 &&
@@ -637,41 +791,79 @@ Extract all candidate details into this exact JSON schema:
       }
       if (!extractedName) extractedName = "Candidate";
 
-      // Extract education items
-      const education: Array<{ degree: string; institution: string; year: string }> = [];
-      const eduRegex = /(b\.?tech|b\.?e\.?|bachelor|master|m\.?tech|m\.?e\.?|bca|mca|b\.?sc|m\.?sc|mba|ph\.?d|diploma)/i;
-      lines.forEach((line: string) => {
-        if (eduRegex.test(line) && line.length < 120) {
-          const yearMatch = line.match(/\b(19\d\d|20\d\d)\b/);
-          education.push({
-            degree: line.replace(/\b(19\d\d|20\d\d)\b.*$/, "").trim(),
-            institution: "University / College",
-            year: yearMatch ? yearMatch[0] : "",
-          });
-        }
-      });
+      const tLower = (rawText || "").toLowerCase();
+      const skillCatalog = [
+        "React", "React Native", "TypeScript", "JavaScript", "Node.js", "Express", "Python", "Django", "Flask",
+        "FastAPI", "Next.js", "Vue.js", "Angular", "Tailwind CSS", "HTML", "CSS", "SQL", "PostgreSQL",
+        "MongoDB", "MySQL", "Redis", "GraphQL", "REST APIs", "Docker", "Kubernetes", "AWS", "Azure", "GCP",
+        "Git", "GitHub", "CI/CD", "Linux", "Java", "Spring Boot", "C++", "C#", ".NET", "Golang", "Rust",
+        "PHP", "Laravel", "Figma", "Redux", "Zustand", "Jest", "Cypress", "Machine Learning", "AI", "NLP"
+      ];
+      const matchedSkills = skillCatalog.filter(s => tLower.includes(s.toLowerCase()));
 
-      // Extract experience items
-      const experience: Array<{ title: string; company: string; duration: string; description: string }> = [];
-      const roleRegex = /(developer|engineer|lead|architect|manager|intern|consultant|analyst|specialist|designer)/i;
-      lines.forEach((line: string, idx: number) => {
-        if (roleRegex.test(line) && line.length < 80 && !line.toLowerCase().includes("skills")) {
-          const durationMatch = line.match(/\b(20\d\d\s*[-–to]\s*(?:present|current|20\d\d)|\d+\s*(?:years?|months?))\b/i);
-          const nextDesc = lines[idx + 1] && lines[idx + 1].length > 15 ? lines[idx + 1] : "Key engineering contributions and delivery.";
-          experience.push({
-            title: line.replace(/\b(20\d\d.*)$/, "").trim(),
-            company: "Technology Team",
-            duration: durationMatch ? durationMatch[0] : "Recent",
-            description: nextDesc,
+      const dRegex = /\b(b\.?tech|b\.?e\.?|bachelor|master|m\.?tech|m\.?e\.?|bca|mca|b\.?sc|m\.?sc|mba|ph\.?d|diploma|higher secondary|senior secondary|12th|10th)\b/i;
+      const fallbackEducation: Array<{ degree: string; institution: string; year: string }> = [];
+      for (let i = 0; i < textLines.length; i++) {
+        const l = textLines[i];
+        if (dRegex.test(l) && l.length < 120) {
+          const yr = l.match(/\b(19\d\d|20\d\d)(?:\s*[-–to]\s*(?:19\d\d|20\d\d|present))?\b/i);
+          let inst = "";
+          if (textLines[i + 1] && !dRegex.test(textLines[i + 1]) && textLines[i + 1].length < 100) {
+            inst = textLines[i + 1].replace(/\b(19\d\d|20\d\d).*$/, "").replace(/^[|\-•\s]+/, "").trim();
+          }
+          fallbackEducation.push({
+            degree: l.replace(/\b(19\d\d|20\d\d).*$/, "").replace(/[|•,].*$/, "").trim(),
+            institution: inst || "University / Institute",
+            year: yr ? yr[0] : (textLines[i + 1]?.match(/\b(19\d\d|20\d\d)\b/)?.[0] || ""),
           });
         }
-      });
+      }
+
+      const rRegex = /\b(developer|engineer|lead|architect|manager|intern|consultant|analyst|specialist|designer|programmer|administrator)\b/i;
+      const dtRegex = /\b((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|20\d\d|19\d\d)[a-z0-9\s]*[-–to]\s*(?:present|current|today|20\d\d|19\d\d|\w+))\b/i;
+      const fallbackExperience: Array<{ title: string; company: string; duration: string; description: string }> = [];
+      for (let i = 0; i < textLines.length; i++) {
+        const l = textLines[i];
+        if (rRegex.test(l) && l.length < 100 && !l.toLowerCase().includes("skills")) {
+          const dur = l.match(dtRegex) || textLines[i + 1]?.match(dtRegex);
+          const comp = l.split(/[|–\-@]/)[1] || textLines[i + 1]?.split(/[|–\-@]/)[0] || "Tech Company";
+          const dLines: string[] = [];
+          for (let j = i + 1; j < Math.min(i + 4, textLines.length); j++) {
+            if (rRegex.test(textLines[j]) && textLines[j].length < 80) break;
+            if (textLines[j].startsWith("-") || textLines[j].startsWith("•") || textLines[j].length > 25) {
+              dLines.push(textLines[j].replace(/^[-•*]\s*/, ""));
+            }
+          }
+          fallbackExperience.push({
+            title: l.split(/[|–\-@]/)[0].trim(),
+            company: comp.replace(dtRegex, "").replace(/[|–\-]/g, "").trim() || "Tech Company",
+            duration: dur ? dur[0].trim() : "Recent",
+            description: dLines.slice(0, 2).join(". ") || "Core engineering and software development responsibilities.",
+          });
+        }
+      }
+
+      const fallbackProjects: Array<{ name: string; description: string; technologies: string[] }> = [];
+      for (let i = 0; i < textLines.length; i++) {
+        const l = textLines[i];
+        const isBullet = /^[-•*]\s*[A-Z0-9]/i.test(l) || (!l.startsWith("-") && l.length < 60 && !l.includes("@") && (l.toLowerCase().includes("app") || l.toLowerCase().includes("platform") || l.toLowerCase().includes("system") || l.toLowerCase().includes("website")));
+        if (isBullet && l.length > 3 && l.length < 90) {
+          const cleanName = l.replace(/^[-•*]\s*/, "").split(/[:|\-–]/)[0].trim();
+          const descPart = l.split(/[:|\-–]/).slice(1).join(" ").trim() || (textLines[i + 1] && textLines[i + 1].length > 15 ? textLines[i + 1].replace(/^[-•*]\s*/, "") : "Software architecture and application development.");
+          if (cleanName && cleanName.length >= 2 && !rRegex.test(cleanName) && !dRegex.test(cleanName)) {
+            fallbackProjects.push({
+              name: cleanName,
+              description: descPart,
+              technologies: [],
+            });
+          }
+        }
+      }
 
       const headline = matchedSkills.length > 0
         ? `${matchedSkills[0]} Developer`
-        : experience[0]?.title || "Full Stack Developer";
-
-      const yoe = Math.min(Math.max(experience.length, 1), 10);
+        : (fallbackExperience[0]?.title || "Full Stack Developer");
+      const yoe = Math.min(Math.max(fallbackExperience.length, 1), 10);
       const expectedSalary = yoe <= 1 ? "₹4–7 LPA" : yoe <= 3 ? "₹7–11 LPA" : yoe <= 6 ? "₹12–18 LPA" : "₹20–30 LPA";
 
       return res.json({
@@ -686,9 +878,9 @@ Extract all candidate details into this exact JSON schema:
           yearsOfExperience: yoe,
           skills: matchedSkills.length > 0 ? matchedSkills : ["Software Engineering", "Problem Solving"],
           possibleRoles: [headline, "Software Engineer"],
-          education: education.slice(0, 3),
-          experience: experience.slice(0, 4),
-          projects: [],
+          education: fallbackEducation.slice(0, 3),
+          experience: fallbackExperience.slice(0, 4),
+          projects: fallbackProjects.slice(0, 4),
           certifications: [],
           expectedSalary,
           preferredRole: headline,

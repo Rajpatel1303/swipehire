@@ -173,7 +173,122 @@ function safeJsonParse(rawText: string): any {
   }
 }
 
-function validateAndSanitizeResumeSchema(extracted: any, candidateNameFallback?: string) {
+function extractWorkerHeuristicSections(rawText: string) {
+  const lines = (rawText || "").split("\n").map(l => l.trim()).filter(Boolean);
+  const sections: Record<string, string[]> = {
+    education: [],
+    experience: [],
+    projects: [],
+    skills: [],
+    summary: [],
+    other: [],
+  };
+
+  let currentSection = "other";
+  const headerRegexes = [
+    { type: "education", regex: /^(?:##\s*)?(?:education|academic|qualifications|degrees?)\b/i },
+    { type: "experience", regex: /^(?:##\s*)?(?:experience|work experience|professional experience|employment history|work history)\b/i },
+    { type: "projects", regex: /^(?:##\s*)?(?:projects|key projects|personal projects|featured projects|portfolio)\b/i },
+    { type: "skills", regex: /^(?:##\s*)?(?:skills|technical skills|technologies|core competencies|tools)\b/i },
+    { type: "summary", regex: /^(?:##\s*)?(?:summary|professional summary|about me|profile|objective)\b/i },
+  ];
+
+  for (const line of lines) {
+    const matched = headerRegexes.find(h => h.regex.test(line));
+    if (matched && line.length < 50) {
+      currentSection = matched.type;
+      continue;
+    }
+    sections[currentSection].push(line);
+  }
+
+  // 1. Education
+  const education: Array<{ degree: string; institution: string; year: string }> = [];
+  const eduLines = sections.education.length > 0 ? sections.education : lines;
+  const degreeRegex = /\b(b\.?tech|b\.?e\.?|bachelor|master|m\.?tech|m\.?e\.?|bca|mca|b\.?sc|m\.?sc|mba|ph\.?d|diploma|higher secondary|senior secondary|12th|10th)\b/i;
+  for (let i = 0; i < eduLines.length; i++) {
+    const line = eduLines[i];
+    if (degreeRegex.test(line) && line.length < 120) {
+      const yearMatch = line.match(/\b(19\d\d|20\d\d)(?:\s*[-–to]\s*(?:19\d\d|20\d\d|present))?\b/i);
+      let institution = "";
+      if (eduLines[i + 1] && !degreeRegex.test(eduLines[i + 1]) && eduLines[i + 1].length < 100) {
+        institution = eduLines[i + 1].replace(/\b(19\d\d|20\d\d).*$/, "").replace(/^[|\-•\s]+/, "").trim();
+      }
+      education.push({
+        degree: line.replace(/\b(19\d\d|20\d\d).*$/, "").replace(/[|•,].*$/, "").trim(),
+        institution: institution || "University / Institute",
+        year: yearMatch ? yearMatch[0] : (eduLines[i + 1]?.match(/\b(19\d\d|20\d\d)\b/)?.[0] || ""),
+      });
+    }
+  }
+
+  // 2. Experience
+  const experience: Array<{ title: string; company: string; duration: string; description: string }> = [];
+  const expLines = sections.experience.length > 0 ? sections.experience : lines;
+  const roleRegex = /\b(developer|engineer|lead|architect|manager|intern|consultant|analyst|specialist|designer|programmer|administrator)\b/i;
+  const dateRegex = /\b((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|20\d\d|19\d\d)[a-z0-9\s]*[-–to]\s*(?:present|current|today|20\d\d|19\d\d|\w+))\b/i;
+
+  for (let i = 0; i < expLines.length; i++) {
+    const line = expLines[i];
+    if (roleRegex.test(line) && line.length < 100 && !line.toLowerCase().includes("skills")) {
+      const durationMatch = line.match(dateRegex) || expLines[i + 1]?.match(dateRegex);
+      const companyMatch = line.split(/[|–\-@]/)[1] || expLines[i + 1]?.split(/[|–\-@]/)[0] || "Tech Company";
+      const descLines: string[] = [];
+      for (let j = i + 1; j < Math.min(i + 4, expLines.length); j++) {
+        if (roleRegex.test(expLines[j]) && expLines[j].length < 80) break;
+        if (expLines[j].startsWith("-") || expLines[j].startsWith("•") || expLines[j].length > 25) {
+          descLines.push(expLines[j].replace(/^[-•*]\s*/, ""));
+        }
+      }
+      experience.push({
+        title: line.split(/[|–\-@]/)[0].trim(),
+        company: companyMatch.replace(dateRegex, "").replace(/[|–\-]/g, "").trim() || "Tech Company",
+        duration: durationMatch ? durationMatch[0].trim() : "Recent",
+        description: descLines.slice(0, 2).join(". ") || "Core engineering and software development responsibilities.",
+      });
+    }
+  }
+
+  // 3. Projects
+  const projects: Array<{ name: string; description: string; technologies: string[] }> = [];
+  const projLines = sections.projects.length > 0 ? sections.projects : lines;
+  for (let i = 0; i < projLines.length; i++) {
+    const line = projLines[i];
+    const isBulletOrHeader = /^[-•*]\s*[A-Z0-9]/i.test(line) || (sections.projects.length > 0 && !line.startsWith("-") && line.length < 70 && !line.includes("@"));
+    if (isBulletOrHeader && line.length > 3 && line.length < 90) {
+      const cleanName = line.replace(/^[-•*]\s*/, "").split(/[:|\-–]/)[0].trim();
+      const descPart = line.split(/[:|\-–]/).slice(1).join(" ").trim() || (projLines[i + 1] && projLines[i + 1].length > 15 ? projLines[i + 1].replace(/^[-•*]\s*/, "") : "Full-stack application development and system architecture.");
+      if (cleanName && cleanName.length >= 2 && !roleRegex.test(cleanName) && !degreeRegex.test(cleanName)) {
+        projects.push({
+          name: cleanName,
+          description: descPart,
+          technologies: [],
+        });
+      }
+    }
+  }
+
+  // 4. Skills
+  const textLower = (rawText || "").toLowerCase();
+  const possibleSkills = [
+    "React", "React Native", "Node.js", "TypeScript", "JavaScript", "Python", "Tailwind CSS",
+    "PostgreSQL", "MongoDB", "Express", "Next.js", "GraphQL", "Docker", "AWS", "Git", "Figma", "Redux", "Flutter", "Golang",
+    "C++", "C#", ".NET", "Java", "Kubernetes", "Redis", "Vue.js", "Angular", "HTML", "CSS", "SQL",
+    "Accounting", "Financial Management", "Auditing", "GST", "Tally", "Excel", "Corporate Finance",
+    "Django", "FastAPI", "REST APIs", "Microservices", "Linux", "CI/CD", "Prisma", "Supabase", "Firebase"
+  ];
+  const skills = possibleSkills.filter(s => textLower.includes(s.toLowerCase()));
+
+  return {
+    education: education.slice(0, 4),
+    experience: experience.slice(0, 5),
+    projects: projects.slice(0, 5),
+    skills,
+    summary: sections.summary.join(" ") || "",
+  };
+}
+
+function validateAndSanitizeResumeSchema(extracted: any, candidateNameFallback?: string, rawResumeText?: string) {
   if (!extracted || typeof extracted !== 'object') {
     extracted = {};
   }
@@ -183,9 +298,89 @@ function validateAndSanitizeResumeSchema(extracted: any, candidateNameFallback?:
   } else {
     yoe = Math.round(yoe * 10) / 10;
   }
-  if (yoe === 0 && Array.isArray(extracted?.experience) && extracted.experience.length > 0) {
-    yoe = 1;
+
+  const heuristic = extractWorkerHeuristicSections(rawResumeText || "");
+
+  // Polymorphic Education
+  let rawEdu = extracted?.education;
+  if (rawEdu && !Array.isArray(rawEdu) && typeof rawEdu === "object") {
+    rawEdu = [rawEdu];
   }
+  let education: Array<{ degree: string; institution: string; year: string }> = (Array.isArray(rawEdu) ? rawEdu : [])
+    .map((e: any) => {
+      if (typeof e === "string") return { degree: e.trim(), institution: "University / Institute", year: "" };
+      const degree = String(e?.degree || e?.major || e?.title || e?.course || e?.qualification || "").trim();
+      const institution = String(e?.institution || e?.university || e?.college || e?.school || e?.institute || "").trim();
+      const year = String(e?.year || e?.graduation_year || e?.duration || e?.period || e?.dates || "").trim();
+      return { degree, institution: institution || "University / Institute", year };
+    })
+    .filter((e: any) => e.degree || e.institution);
+
+  if (education.length === 0 && heuristic.education.length > 0) {
+    education = heuristic.education;
+  }
+
+  // Polymorphic Experience
+  let rawExp = extracted?.experience;
+  if (rawExp && !Array.isArray(rawExp) && typeof rawExp === "object") {
+    rawExp = [rawExp];
+  }
+  let experience: Array<{ title: string; company: string; duration: string; description: string }> = (Array.isArray(rawExp) ? rawExp : [])
+    .map((exp: any) => {
+      if (typeof exp === "string") return { title: exp.trim(), company: "Tech Company", duration: "Recent", description: "Software development responsibilities." };
+      const title = String(exp?.title || exp?.role || exp?.position || exp?.jobTitle || exp?.designation || "").trim();
+      const company = String(exp?.company || exp?.organization || exp?.employer || exp?.workplace || "").trim();
+      const duration = String(exp?.duration || exp?.period || exp?.dates || exp?.date_range || exp?.years || "Recent").trim();
+      let description = exp?.description || exp?.summary || exp?.responsibilities || "";
+      if (Array.isArray(description)) description = description.join(". ");
+      return { title, company: company || "Tech Company", duration, description: String(description).trim() };
+    })
+    .filter((exp: any) => exp.title || exp.company);
+
+  if (experience.length === 0 && heuristic.experience.length > 0) {
+    experience = heuristic.experience;
+  }
+
+  if (yoe === 0 && experience.length > 0) {
+    yoe = Math.min(Math.max(experience.length, 1), 8);
+  }
+
+  // Polymorphic Projects
+  let rawProj = extracted?.projects;
+  if (rawProj && !Array.isArray(rawProj) && typeof rawProj === "object") {
+    rawProj = [rawProj];
+  }
+  let projects: Array<{ name: string; description: string; technologies: string[] }> = (Array.isArray(rawProj) ? rawProj : [])
+    .map((p: any) => {
+      if (typeof p === "string") {
+        return { name: p.trim(), description: "Software engineering and implementation.", technologies: [] };
+      }
+      const name = String(p?.name || p?.title || p?.projectName || p?.project_name || "").trim();
+      const description = String(p?.description || p?.summary || p?.details || "Application architecture and development.").trim();
+      let technologies = p?.technologies || p?.tech_stack || p?.tools || p?.skills || [];
+      if (typeof technologies === "string") {
+        technologies = technologies.split(/[,|/]/).map((t: string) => t.trim()).filter(Boolean);
+      }
+      return {
+        name,
+        description,
+        technologies: Array.isArray(technologies) ? technologies.map((t: any) => String(t).trim()).filter(Boolean) : []
+      };
+    })
+    .filter((p: any) => p.name);
+
+  if (projects.length === 0 && heuristic.projects.length > 0) {
+    projects = heuristic.projects;
+  }
+
+  // Skills
+  let skills: string[] = Array.isArray(extracted?.skills)
+    ? Array.from(new Set(extracted.skills.map((s: any) => String(s).trim()).filter(Boolean)))
+    : [];
+  if (skills.length === 0 && heuristic.skills.length > 0) {
+    skills = heuristic.skills;
+  }
+
   let salary = typeof extracted?.expectedSalary === 'string' ? extracted.expectedSalary.trim() : '';
   if (!salary) {
     if (yoe <= 1) salary = "₹4–7 LPA";
@@ -193,18 +388,20 @@ function validateAndSanitizeResumeSchema(extracted: any, candidateNameFallback?:
     else if (yoe <= 6) salary = "₹12–18 LPA";
     else salary = "₹20–30 LPA";
   }
+
   let headline = typeof extracted?.headline === 'string' ? extracted.headline.trim() : '';
   if (!headline || headline.toLowerCase() === 'software professional' || headline.toLowerCase() === 'professional') {
     if (Array.isArray(extracted?.possibleRoles) && extracted.possibleRoles[0]) {
       headline = String(extracted.possibleRoles[0]).trim();
-    } else if (Array.isArray(extracted?.experience) && extracted.experience[0]?.title) {
-      headline = String(extracted.experience[0].title).trim();
-    } else if (Array.isArray(extracted?.skills) && extracted.skills.length > 0) {
-      headline = `${extracted.skills[0]} Developer`;
+    } else if (experience[0]?.title) {
+      headline = String(experience[0].title).trim();
+    } else if (skills.length > 0) {
+      headline = `${skills[0]} Developer`;
     } else {
       headline = 'Software Engineer';
     }
   }
+
   const extractedLocation = typeof extracted?.location === 'string' ? extracted.location.trim() : '';
   const extractedEmail = typeof extracted?.email === 'string' ? extracted.email.trim() : '';
   const cleanAndDisambiguateName = (nameInput: string, locInput: string, emailInput: string, fallback?: string): string => {
@@ -233,43 +430,24 @@ function validateAndSanitizeResumeSchema(extracted: any, candidateNameFallback?:
   return {
     fullName,
     headline,
-    email: typeof extracted.email === 'string' ? extracted.email.trim() : '',
-    phone: typeof extracted.phone === 'string' ? extracted.phone.trim() : '',
-    location: typeof extracted.location === 'string' ? extracted.location.trim() : '',
+    email: typeof extracted?.email === 'string' ? extracted.email.trim() : '',
+    phone: typeof extracted?.phone === 'string' ? extracted.phone.trim() : '',
+    location: typeof extracted?.location === 'string' ? extracted.location.trim() : '',
     workPreference: ['Hybrid', 'Remote', 'Onsite'].includes(extracted?.workPreference) ? extracted.workPreference : 'Hybrid',
     yearsOfExperience: yoe,
-    skills: Array.isArray(extracted?.skills) ? Array.from(new Set(extracted.skills.map((s: any) => String(s).trim()).filter(Boolean))) : [],
+    skills: skills.length > 0 ? skills : ['Software Engineering', 'Problem Solving'],
     possibleRoles: Array.isArray(extracted?.possibleRoles) && extracted.possibleRoles.length > 0
       ? extracted.possibleRoles.map((r: any) => String(r).trim()).filter(Boolean)
-      : [headline],
-    education: Array.isArray(extracted?.education)
-      ? extracted.education.map((e: any) => ({
-          degree: String(e?.degree || '').trim(),
-          institution: String(e?.institution || '').trim(),
-          year: String(e?.year || '').trim(),
-        })).filter((e: any) => e.degree || e.institution)
-      : [],
-    experience: Array.isArray(extracted?.experience)
-      ? extracted.experience.map((exp: any) => ({
-          title: String(exp?.title || '').trim(),
-          company: String(exp?.company || '').trim(),
-          duration: String(exp?.duration || '').trim(),
-          description: String(exp?.description || '').trim(),
-        })).filter((exp: any) => exp.title || exp.company)
-      : [],
-    projects: Array.isArray(extracted?.projects)
-      ? extracted.projects.map((p: any) => ({
-          name: String(p?.name || '').trim(),
-          description: String(p?.description || '').trim(),
-          technologies: Array.isArray(p?.technologies) ? p.technologies.map((t: any) => String(t).trim()).filter(Boolean) : [],
-        })).filter((p: any) => p.name)
-      : [],
+      : [headline, 'Software Engineer'],
+    education,
+    experience,
+    projects,
     certifications: Array.isArray(extracted?.certifications)
       ? extracted.certifications.map((c: any) => String(c).trim()).filter(Boolean)
       : [],
     expectedSalary: salary,
     preferredRole: typeof extracted?.preferredRole === 'string' && extracted.preferredRole.trim().length > 0 ? extracted.preferredRole.trim() : headline,
-    bio: typeof extracted?.bio === 'string' ? extracted.bio.trim() : '',
+    bio: typeof extracted?.bio === 'string' && extracted.bio.trim().length > 0 ? extracted.bio.trim() : (heuristic.summary || `${fullName} is an experienced professional specializing in ${skills.slice(0, 3).join(", ") || "modern engineering"}.`),
     languages: Array.isArray(extracted?.languages) ? extracted.languages.map((l: any) => String(l).trim()).filter(Boolean) : ['English'],
   };
 }
@@ -326,29 +504,29 @@ export default {
           );
         }
 
-        const safeResumeText = sanitizedText.slice(0, 12000);
-        const systemPrompt = `You are SwipeHired's high-precision, zero-hallucination AI Resume Parser powered by Google Gemma 4.
-Extract ALL facts stated in the resume into valid JSON matching:
+        const safeResumeText = sanitizedText.slice(0, 10000);
+        const systemPrompt = `You are SwipeHired's high-speed AI Resume Parser. Respond strictly with raw JSON matching the schema below. Do NOT output internal thoughts, reasoning blocks, or markdown code blocks.
+
+Schema:
 {
-  "fullName": "Candidate full human name",
-  "headline": "Current professional title",
-  "email": "candidate email address",
-  "phone": "candidate phone number",
-  "location": "City, State, Country",
+  "fullName": "Candidate full name",
+  "headline": "Current job title",
+  "email": "email address",
+  "phone": "phone number",
+  "location": "City, Country",
   "workPreference": "Hybrid" | "Remote" | "Onsite",
   "yearsOfExperience": number,
   "skills": ["Skill 1", "Skill 2"],
   "possibleRoles": ["Role 1", "Role 2"],
-  "education": [{"degree":"Degree name","institution":"University name","year":"Graduation year"}],
-  "experience": [{"title":"Job title","company":"Company name","duration":"Dates","description":"Responsibilities"}],
-  "projects": [{"name":"Project name","description":"Summary","technologies":["Tech 1"]}],
-  "certifications": ["Certification 1"],
+  "education": [{"degree":"Degree","institution":"College/University","year":"Year"}],
+  "experience": [{"title":"Job Title","company":"Company Name","duration":"Dates","description":"Responsibilities"}],
+  "projects": [{"name":"Project Name","description":"Summary","technologies":["Tech 1"]}],
   "expectedSalary": "Expected CTC",
-  "preferredRole": "Target role",
-  "bio": "Executive summary"
+  "preferredRole": "Primary target role",
+  "bio": "2-3 sentence executive summary"
 }`;
 
-        const userPrompt = `<RESUME_DATA>\n${safeResumeText}\n</RESUME_DATA>${candidateName ? `\nCandidate Identity Hint: "${candidateName}"` : ""}\nExtract all details strictly into the JSON schema above.`;
+        const userPrompt = `<RESUME_DATA>\n${safeResumeText}\n</RESUME_DATA>${candidateName ? `\nCandidate Identity Hint: "${candidateName}"` : ""}\nExtract all details strictly into the JSON schema.`;
 
         let parsedResult: any = null;
 
@@ -360,7 +538,7 @@ Extract ALL facts stated in the resume into valid JSON matching:
                 { role: "system", content: systemPrompt },
                 { role: "user", content: userPrompt },
               ],
-              max_tokens: 2500,
+              max_tokens: 1500,
               temperature: 0.1,
             });
             const rawAiOutput = typeof aiResponse === "string" ? aiResponse : aiResponse?.response || aiResponse?.generated_text || JSON.stringify(aiResponse);
@@ -370,9 +548,11 @@ Extract ALL facts stated in the resume into valid JSON matching:
           }
         }
 
-        // 2. Eden AI Gemma 4 Execution / Fallback
+        // 2. Eden AI Gemma 4 Execution / Fallback with 25s timeout
         const edenApiKey = env.EDENAI_API_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiOGE5Yjk1ZjEtODY1NS00ZjNiLTg5YzYtZmJhOWRmZWI1ZmE5IiwidHlwZSI6ImFwaV90b2tlbiIsIm5hbWUiOiJIaXJseSIsImlzX2N1c3RvbSI6dHJ1ZX0.MtgA6NbrsAC6hyEmYdurisnQLM8oEgJUE-q24e5h5Vc";
         if (!parsedResult && edenApiKey) {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 25000);
           try {
             const edenRes = await fetch("https://api.edenai.run/v3/chat/completions", {
               method: "POST",
@@ -382,10 +562,14 @@ Extract ALL facts stated in the resume into valid JSON matching:
               },
               body: JSON.stringify({
                 model: "google/gemma-4-31b-it",
-                messages: [{ role: "user", content: `${systemPrompt}\n\n${userPrompt}` }],
-                max_tokens: 2500,
+                messages: [
+                  { role: "system", content: "You are SwipeHired's high-speed AI Resume Parser. Respond strictly with raw JSON matching the schema without markdown or thinking." },
+                  { role: "user", content: `${systemPrompt}\n\n${userPrompt}` }
+                ],
+                max_tokens: 1500,
                 temperature: 0.1,
               }),
+              signal: controller.signal,
             });
             if (edenRes.ok) {
               const edenJson = (await edenRes.json()) as any;
@@ -393,11 +577,13 @@ Extract ALL facts stated in the resume into valid JSON matching:
               parsedResult = safeJsonParse(rawContent);
             }
           } catch (edenErr) {
-            console.warn("[Eden AI Gemma 4 Fallback Failed]:", edenErr);
+            console.warn("[Eden AI Gemma 4 Fallback Failed or Timed Out]:", edenErr);
+          } finally {
+            clearTimeout(timeoutId);
           }
         }
 
-        const sanitizedCandidateProfile = validateAndSanitizeResumeSchema(parsedResult, candidateName);
+        const sanitizedCandidateProfile = validateAndSanitizeResumeSchema(parsedResult, candidateName, sanitizedText);
 
         return new Response(
           JSON.stringify({ success: true, extracted: sanitizedCandidateProfile }),
