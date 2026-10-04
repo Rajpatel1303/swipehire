@@ -1961,6 +1961,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }),
       });
 
+      if (!response.ok) {
+        let errMessage = `Server error ${response.status}`;
+        try {
+          const errData = await response.json();
+          errMessage = errData?.error || errData?.message || errMessage;
+        } catch {
+          const errText = await response.text().catch(() => "");
+          if (errText) errMessage = `${errMessage}: ${errText.slice(0, 200)}`;
+        }
+        throw new Error(errMessage);
+      }
+
       const data = await response.json();
       if (!data.success || !data.session?.id) {
         throw new Error(data.error || "Failed to initialize AI interview session");
@@ -2145,6 +2157,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           },
         }),
       });
+
+      if (!response.ok) {
+        let errMessage = `Server error ${response.status}`;
+        try {
+          const errData = await response.json();
+          errMessage = errData?.error || errData?.message || errMessage;
+        } catch {
+          const errText = await response.text().catch(() => "");
+          if (errText) errMessage = `${errMessage}: ${errText.slice(0, 200)}`;
+        }
+        throw new Error(errMessage);
+      }
 
       const data = await response.json();
       if (!data.success || !data.session) {

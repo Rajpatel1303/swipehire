@@ -255,6 +255,18 @@ export const AIInterviewChatRoom: React.FC<AIInterviewChatRoomProps> = ({
         }),
       });
 
+      if (!res.ok) {
+        let errMessage = `Server error ${res.status}`;
+        try {
+          const errData = await res.json();
+          errMessage = errData?.error || errData?.message || errMessage;
+        } catch {
+          const errText = await res.text().catch(() => "");
+          if (errText) errMessage = `${errMessage}: ${errText.slice(0, 200)}`;
+        }
+        throw new Error(errMessage);
+      }
+
       const data = await res.json();
       if (!data.success) {
         throw new Error(data.error || "Answer evaluation failed.");
