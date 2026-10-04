@@ -1279,32 +1279,66 @@ Generate exactly ${countNeeded} candidate-specific interview questions.`;
 
       // Fallback if empty
       if (generatedQuestions.length === 0) {
-        generatedQuestions = [
-          {
-            order: 1,
-            question: `In your past projects with ${(job?.requiredSkills || ["TypeScript", "React"])[0]}, how did you handle state synchronization and edge cases?`,
-            category: "Core Skills",
-            difficulty: "Practical",
-            idealCriteria: "Clear explanation of data flow, caching, and state management.",
-            source: "ai_generated" as const,
-          },
-          {
-            order: 2,
-            question: "Walk us through an optimization you made that significantly reduced API latency or compute cost.",
-            category: "Problem Solving",
-            difficulty: "Practical",
-            idealCriteria: "Quantitative metrics, root cause diagnosis, and architectural solution.",
-            source: "ai_generated" as const,
-          },
-          {
-            order: 3,
-            question: "How do you structure automated tests and error handling to ensure production resilience?",
-            category: "Practical Engineering",
-            difficulty: "Practical",
-            idealCriteria: "Unit/integration balance, circuit breakers, and logging.",
-            source: "ai_generated" as const,
-          },
-        ];
+        const firstSkill = (job?.requiredSkills || candidate?.skills || [])[0] || "core tools";
+        const isTechRole = /developer|engineer|coder|architect|programmer|devops|full\s*stack|frontend|backend/i.test(
+          safeJobTitle + " " + (candidate?.headline || "")
+        );
+
+        if (isTechRole) {
+          generatedQuestions = [
+            {
+              order: 1,
+              question: `In your past projects using ${firstSkill}, how did you handle state management, edge cases, and performance?`,
+              category: "Core Skills",
+              difficulty: "Practical",
+              idealCriteria: "Clear explanation of data flow, error handling, and architecture.",
+              source: "ai_generated" as const,
+            },
+            {
+              order: 2,
+              question: "Walk us through a challenging technical problem you diagnosed and resolved in production.",
+              category: "Problem Solving",
+              difficulty: "Practical",
+              idealCriteria: "Quantitative metrics, root cause diagnosis, and problem-solving steps.",
+              source: "ai_generated" as const,
+            },
+            {
+              order: 3,
+              question: "How do you structure testing and error handling to ensure application stability?",
+              category: "Practical Engineering",
+              difficulty: "Practical",
+              idealCriteria: "Balanced testing approach, logging, and error boundaries.",
+              source: "ai_generated" as const,
+            },
+          ];
+        } else {
+          generatedQuestions = [
+            {
+              order: 1,
+              question: `In your previous experience with ${firstSkill}, what tools or workflows do you rely on to manage your daily tasks efficiently?`,
+              category: "Core Skills",
+              difficulty: "Practical",
+              idealCriteria: `Demonstrates practical familiarity with ${firstSkill} and systematic task execution.`,
+              source: "ai_generated" as const,
+            },
+            {
+              order: 2,
+              question: "Can you describe a scenario where you had to process high-volume or critical data, and how you ensured 100% accuracy?",
+              category: "Operational Accuracy",
+              difficulty: "Practical",
+              idealCriteria: "Explains quality control checks, error prevention methods, and attention to detail.",
+              source: "ai_generated" as const,
+            },
+            {
+              order: 3,
+              question: "When faced with an unexpected deadline or discrepancy in your work, how do you troubleshoot and prioritize resolution?",
+              category: "Problem Solving",
+              difficulty: "Practical",
+              idealCriteria: "Demonstrates composure, structured troubleshooting, and effective escalation or resolution.",
+              source: "ai_generated" as const,
+            },
+          ];
+        }
       }
 
       // Persist to Supabase

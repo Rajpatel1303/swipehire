@@ -210,7 +210,7 @@ export function evaluateAnswerLogically(params: {
   if (isEvasiveOrNonResponsive(trimmed) || words === 0) {
     return {
       answerQuality: 0.00,
-      assessment: `Non-responsive / evasive answer (${words} word${words === 1 ? "" : "s"}). The candidate failed to address the technical question and demonstrated no engineering understanding on this topic.`,
+      assessment: `Non-responsive / evasive answer (${words} word${words === 1 ? "" : "s"}). The candidate failed to address the question and demonstrated no practical understanding on this topic.`,
       followUpRequired: false,
       nextQuestion: null,
       matchedKeywords: [],

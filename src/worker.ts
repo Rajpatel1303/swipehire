@@ -21,7 +21,7 @@ export interface Env {
 const DEFAULT_SUPABASE_URL = "https://czrswxwefgiwjhalljui.supabase.co";
 const DEFAULT_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6cnN3eHdlZmdpd2poYWxsanVpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2MTMxMTgsImV4cCI6MjEwMjE4OTExOH0.Bo1TfhxJEYQVAChskLm3ejTKIHl3ENcn2f6I8QIvqf8";
 const DEFAULT_SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6cnN3eHdlZmdpd2poYWxsanVpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NjYxMzExOCwiZXhwIjoyMTAyMTg5MTE4fQ.mwCpedWSLTO9HPRwxvK2is0nCbn8CO7usDVNibMWYfA";
-const DEFAULT_EDENAI_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiOGE5Yjk1ZjEtODY1NS00ZjNiLTg5YzYtZmJhOWRmZWI1ZmE5IiwidHlwZSI6ImFwaV90b2tlbiIsIm5hbWUiOiJIaXJseSIsImlzX2N1c3RvbSI6dHJ1ZX0.MtgA6NbrsAC6hyEmYdurisnQLM8oEgJUE-q24e5h5Vc";
+const DEFAULT_EDENAI_API_KEY = "sk-eden-live-wbucgfVF_sDpqDQ3BA6eeINC4JS-ad7FZQLvYLnJW883c97dff8";
 
 function generateRandomId(prefix: string): string {
   const array = new Uint8Array(8);
@@ -694,7 +694,7 @@ Schema:
         }
 
         // 2. Eden AI Gemma 4 Execution / Fallback with 25s timeout
-        const edenApiKey = env.EDENAI_API_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiOGE5Yjk1ZjEtODY1NS00ZjNiLTg5YzYtZmJhOWRmZWI1ZmE5IiwidHlwZSI6ImFwaV90b2tlbiIsIm5hbWUiOiJIaXJseSIsImlzX2N1c3RvbSI6dHJ1ZX0.MtgA6NbrsAC6hyEmYdurisnQLM8oEgJUE-q24e5h5Vc";
+        const edenApiKey = env.EDENAI_API_KEY || DEFAULT_EDENAI_API_KEY;
         if (!parsedResult && edenApiKey) {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 25000);
@@ -1063,32 +1063,66 @@ Generate exactly ${countNeeded} candidate-specific interview questions.`;
 
         // Fallback questions if empty
         if (generatedQuestions.length === 0) {
-          generatedQuestions = [
-            {
-              order: 1,
-              question: `In your past projects with ${(job?.requiredSkills || ["TypeScript", "React"])[0]}, how did you handle state synchronization and edge cases?`,
-              category: "Core Skills",
-              difficulty: "Practical",
-              idealCriteria: "Clear explanation of data flow, caching, and state management.",
-              source: "ai_generated" as const,
-            },
-            {
-              order: 2,
-              question: "Walk us through an optimization you made that significantly reduced API latency or compute cost.",
-              category: "Problem Solving",
-              difficulty: "Practical",
-              idealCriteria: "Quantitative metrics, root cause diagnosis, and architectural solution.",
-              source: "ai_generated" as const,
-            },
-            {
-              order: 3,
-              question: "How do you structure automated tests and error handling to ensure production resilience?",
-              category: "Practical Engineering",
-              difficulty: "Practical",
-              idealCriteria: "Unit/integration balance, circuit breakers, and logging.",
-              source: "ai_generated" as const,
-            },
-          ];
+          const firstSkill = (job?.requiredSkills || candidate?.skills || [])[0] || "core tools";
+          const isTechRole = /developer|engineer|coder|architect|programmer|devops|full\s*stack|frontend|backend/i.test(
+            safeJobTitle + " " + (candidate?.headline || "")
+          );
+
+          if (isTechRole) {
+            generatedQuestions = [
+              {
+                order: 1,
+                question: `In your past projects using ${firstSkill}, how did you handle state management, edge cases, and performance?`,
+                category: "Core Skills",
+                difficulty: "Practical",
+                idealCriteria: "Clear explanation of data flow, error handling, and architecture.",
+                source: "ai_generated" as const,
+              },
+              {
+                order: 2,
+                question: "Walk us through a challenging technical problem you diagnosed and resolved in production.",
+                category: "Problem Solving",
+                difficulty: "Practical",
+                idealCriteria: "Quantitative metrics, root cause diagnosis, and problem-solving steps.",
+                source: "ai_generated" as const,
+              },
+              {
+                order: 3,
+                question: "How do you structure testing and error handling to ensure application stability?",
+                category: "Practical Engineering",
+                difficulty: "Practical",
+                idealCriteria: "Balanced testing approach, logging, and error boundaries.",
+                source: "ai_generated" as const,
+              },
+            ];
+          } else {
+            generatedQuestions = [
+              {
+                order: 1,
+                question: `In your previous experience with ${firstSkill}, what tools or workflows do you rely on to manage your daily tasks efficiently?`,
+                category: "Core Skills",
+                difficulty: "Practical",
+                idealCriteria: `Demonstrates practical familiarity with ${firstSkill} and systematic task execution.`,
+                source: "ai_generated" as const,
+              },
+              {
+                order: 2,
+                question: "Can you describe a scenario where you had to process high-volume or critical data, and how you ensured 100% accuracy?",
+                category: "Operational Accuracy",
+                difficulty: "Practical",
+                idealCriteria: "Explains quality control checks, error prevention methods, and attention to detail.",
+                source: "ai_generated" as const,
+              },
+              {
+                order: 3,
+                question: "When faced with an unexpected deadline or discrepancy in your work, how do you troubleshoot and prioritize resolution?",
+                category: "Problem Solving",
+                difficulty: "Practical",
+                idealCriteria: "Demonstrates composure, structured troubleshooting, and effective escalation or resolution.",
+                source: "ai_generated" as const,
+              },
+            ];
+          }
         }
 
         const validInterviewType =
