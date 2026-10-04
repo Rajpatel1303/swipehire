@@ -67,6 +67,12 @@ export const CompanyJobsPage: React.FC = () => {
 
   // Defense-in-depth: scope strictly to company.id
   const companyJobs = jobs.filter((job) => !company.id || job.companyId === company.id);
+  const companyApplications = applications.filter(
+    (a) =>
+      (!company.id || a.companyId === company.id) &&
+      !a.hiddenFromCompany &&
+      !a.deletedByCompany
+  );
 
   const filteredJobs = companyJobs.filter((job) => {
     if (filterStatus === "all") return true;
@@ -229,8 +235,8 @@ export const CompanyJobsPage: React.FC = () => {
         ) : (
           filteredJobs.map((job) => {
             const isDraft = job.status === "draft";
-            const appCount = applications.filter((a) => a.jobId === job.id).length;
-            const interviewCount = applications.filter(
+            const appCount = companyApplications.filter((a) => a.jobId === job.id).length;
+            const interviewCount = companyApplications.filter(
               (a) => a.jobId === job.id && a.status === "interview"
             ).length;
 
@@ -382,7 +388,11 @@ export const CompanyJobsPage: React.FC = () => {
                     </button>
 
                     <button
-                      onClick={() => deleteJob(job.id)}
+                      onClick={() => {
+                        if (window.confirm(`Are you sure you want to delete the job posting "${job.title}"? This cannot be undone.`)) {
+                          deleteJob(job.id);
+                        }
+                      }}
                       className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full border border-slate-200 transition-colors cursor-pointer"
                       title="Delete Posting"
                     >

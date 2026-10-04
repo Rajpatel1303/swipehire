@@ -13,6 +13,7 @@ import {
   Send,
   Calendar,
   Layers,
+  Bot,
 } from "lucide-react";
 import { Job, Application } from "../../types";
 import { useApp } from "../../context/AppContext";
@@ -184,24 +185,24 @@ export const CandidateJobDetailModal: React.FC<CandidateJobDetailModalProps> = (
             id="modal-apply-btn"
             disabled={isApplied}
             onClick={() => {
+              if (isApplied) return;
               onApply(job.id);
-              onClose();
             }}
             className={`px-6 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-xs cursor-pointer ${
               isApplied
-                ? "bg-emerald-100 text-emerald-800 cursor-not-allowed"
-                : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20"
+                ? "bg-slate-100 text-slate-500 border border-slate-200 cursor-not-allowed"
+                : "bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white shadow-indigo-600/20"
             }`}
           >
             {isApplied ? (
               <>
-                <CheckCircle2 className="w-4 h-4" />
-                <span>Application Submitted</span>
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span>Applied (Interview Done)</span>
               </>
             ) : (
               <>
-                <Send className="w-4 h-4" />
-                <span>1-Click Apply Now</span>
+                <Bot className="w-4 h-4 text-indigo-200" />
+                <span>Interview &amp; Apply Now</span>
               </>
             )}
           </button>

@@ -21,6 +21,7 @@ export interface CustomSelectProps<T = string | number> {
   variant?: "pill" | "card" | "subtle";
   size?: "sm" | "md" | "lg";
   align?: "left" | "right";
+  direction?: "up" | "down";
   className?: string;
   buttonClassName?: string;
   menuClassName?: string;
@@ -39,6 +40,7 @@ export function CustomSelect<T extends string | number>({
   variant = "pill",
   size = "md",
   align = "left",
+  direction = "down",
   className = "",
   buttonClassName = "",
   menuClassName = "",
@@ -159,7 +161,9 @@ export function CustomSelect<T extends string | number>({
       {/* Dropdown Menu Popover */}
       {isOpen && (
         <div
-          className={`absolute z-50 mt-1.5 min-w-[220px] w-max max-w-[340px] bg-white border-2 border-slate-200 rounded-2xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 backdrop-blur-md ${
+          className={`absolute z-50 min-w-[220px] w-max max-w-[340px] bg-white border-2 border-slate-200 rounded-2xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 backdrop-blur-md ${
+            direction === "up" ? "bottom-full mb-1.5" : "top-full mt-1.5"
+          } ${
             align === "right" ? "right-0" : "left-0"
           } ${menuClassName}`}
         >

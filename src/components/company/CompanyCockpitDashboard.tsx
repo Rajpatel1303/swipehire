@@ -60,7 +60,7 @@ export const CompanyCockpitDashboard: React.FC = () => {
     companyJobs[0]?.id || ""
   );
   const [selectedRadarAppId, setSelectedRadarAppId] = useState<string>(
-    applications[0]?.id || ""
+    ""
   );
 
   // Filter applications for company view (excluding rejected, hidden, or deleted)
@@ -121,7 +121,7 @@ export const CompanyCockpitDashboard: React.FC = () => {
               className="flex items-center gap-2 px-5 py-3.5 bg-white hover:bg-slate-100 text-slate-900 border-2 border-slate-900 rounded-full font-black text-xs uppercase tracking-widest shadow-2xs transition-all transform hover:-translate-y-0.5 cursor-pointer"
             >
               <Users className="w-4 h-4 text-sky-600" />
-              <span>Applications Inbox ({applications.length})</span>
+              <span>Applications Inbox ({companyApplications.length})</span>
             </button>
 
             <button
@@ -177,10 +177,10 @@ export const CompanyCockpitDashboard: React.FC = () => {
               <Clock className="w-4 h-4 text-amber-500" />
             </div>
             <div className="text-3xl font-black text-amber-600">
-              {applications.filter((a) => a.status === "applied").length}
+              {companyApplications.filter((a) => a.status === "applied").length}
             </div>
             <span className="text-[10px] text-amber-700 font-black uppercase tracking-wider">
-              {applications.filter((a) => {
+              {companyApplications.filter((a) => {
                 if (a.status !== "applied") return false;
                 const hoursLeft = Math.max(0, (new Date(a.appliedAt).getTime() + 72 * 3600 * 1000 - Date.now()) / (3600 * 1000));
                 return hoursLeft < 24;
@@ -487,13 +487,13 @@ export const CompanyCockpitDashboard: React.FC = () => {
             </button>
           </div>
 
-          {applications.length === 0 ? (
+          {companyApplications.length === 0 ? (
             <div className="p-12 bg-white rounded-[32px] border-2 border-slate-900 text-center space-y-3 shadow-xl">
               <p className="text-xs text-slate-500 font-medium">No applications received yet.</p>
             </div>
           ) : (
             <div className="space-y-4">
-              {applications.slice(0, 5).map((app) => (
+              {companyApplications.slice(0, 5).map((app) => (
                 <div
                   key={app.id}
                   className="bg-white rounded-[28px] border-2 border-slate-900 shadow-xl hover:border-slate-800 transition-all p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
@@ -632,7 +632,7 @@ export const CompanyCockpitDashboard: React.FC = () => {
                 <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
                   <span>{job.location}</span>
                   <span className="font-black text-slate-800 uppercase tracking-wider text-[10px]">
-                    {applications.filter((a) => a.jobId === job.id).length} Applicants
+                    {companyApplications.filter((a) => a.jobId === job.id).length} Applicants
                   </span>
                 </div>
               </div>

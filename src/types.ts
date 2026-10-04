@@ -207,6 +207,7 @@ export interface Job {
   isCandidateMatch?: boolean;
   aiSummary?: string;
   isFeatured?: boolean;
+  interviewSettings?: InterviewSettings;
 }
 
 export type ApplicationStatus =
@@ -287,6 +288,23 @@ export interface Application {
   deletedByCompany?: boolean;
   rejectedAt?: string;
   rejectionReason?: string;
+  // Active AI Interview Fields (Google Gemma 4)
+  aiInterviewSessionId?: string;
+  aiInterviewStatus?: "invited" | "in_progress" | "completed";
+  aiInterviewScore?: number;
+  aiInterviewVerdict?: string;
+  aiInterviewCompletedAt?: string;
+  aiInterviewEvaluation?: InterviewEvaluation;
+  aiInterviewIntegrityScore?: number;
+  proctoringMetrics?: ProctoringMetrics;
+  aiInterviewQAs?: Array<{
+    question: string;
+    answer: string;
+    qualityScore?: number;
+    assessment?: string;
+    audioUrl?: string;
+    audioDurationSeconds?: number;
+  }>;
 }
 
 export interface PulseStep {
@@ -449,3 +467,135 @@ export interface AdminReport {
   createdAt: string;
   status: "pending" | "resolved" | "dismissed";
 }
+
+// ==========================================
+// AI INTERVIEW MODULE TYPES
+// ==========================================
+
+export type InterviewType = "company_questions" | "ai_generated" | "hybrid";
+export type InterviewMode = "chat" | "voice" | "video" | "coding";
+export type InterviewSessionStatus = "pending" | "in_progress" | "completed" | "abandoned";
+export type InterviewQuestionSource = "company" | "ai_generated" | "follow_up";
+
+export interface InterviewSettings {
+  type: InterviewType;
+  questions?: string[];
+  totalQuestions?: number;
+  customGuidelines?: string;
+}
+
+export interface InterviewTemplate {
+  id: string;
+  companyId?: string;
+  jobId?: string;
+  title: string;
+  interviewType: InterviewType;
+  totalQuestions: number;
+  targetSkills: string[];
+  companyQuestions?: string[];
+  guidelines?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InterviewQuestion {
+  id: string;
+  sessionId?: string;
+  templateId?: string;
+  questionOrder: number;
+  questionText: string;
+  category: string;
+  difficulty?: string;
+  source: InterviewQuestionSource;
+  parentQuestionId?: string;
+  idealCriteria?: string;
+  createdAt: string;
+}
+
+export interface InterviewAnswer {
+  id: string;
+  sessionId: string;
+  questionId: string;
+  candidateId: string;
+  questionText: string;
+  answerText: string;
+  answerQualityScore: number; // 0.0 - 1.0
+  aiAssessment?: string;
+  followUpTriggered: boolean;
+  followUpQuestionId?: string;
+  responseTimeSeconds?: number;
+  audioUrl?: string;
+  audioDurationSeconds?: number;
+  createdAt: string;
+}
+
+export interface ProctoringIncident {
+  id: string;
+  timestamp: string;
+  type: "gaze_deviation" | "face_not_detected" | "multiple_faces" | "tab_switch" | "suspicious_paste" | "background_noise";
+  severity: "low" | "medium" | "high";
+  details: string;
+  durationSeconds?: number;
+}
+
+export interface ProctoringMetrics {
+  integrityScore: number; // 0 - 100
+  eyeContactScore: number; // 0 - 100 (% of session)
+  tabSwitchCount: number;
+  timeOffScreenSeconds: number;
+  multipleFacesCount: number;
+  faceAbsenceCount: number;
+  pasteEventsCount: number;
+  speechCadenceWpm?: number;
+  speechClarityScore?: number;
+  flagLevel: "clean" | "low_risk" | "medium_risk" | "high_risk";
+  incidents: ProctoringIncident[];
+  summary: string;
+}
+
+export interface InterviewEvaluation {
+  id: string;
+  sessionId: string;
+  companyId: string;
+  candidateId: string;
+  overallScore: number; // 0 - 100
+  technicalScore: number;
+  problemSolvingScore: number;
+  projectUnderstandingScore: number;
+  communicationScore: number;
+  roleKnowledgeScore: number;
+  verdict: "Strong Hire" | "Hire" | "Borderline" | "No Hire" | string;
+  strengths: string[];
+  areasToExplore: string[];
+  aiSummary: string;
+  detailedFeedback?: Record<string, any>;
+  proctoringMetrics?: ProctoringMetrics;
+  createdAt: string;
+}
+
+export interface InterviewSession {
+  id: string;
+  companyId: string;
+  candidateId: string;
+  jobId?: string;
+  templateId?: string;
+  interviewType: InterviewType;
+  mode: InterviewMode;
+  status: InterviewSessionStatus;
+  currentQuestionIndex: number;
+  totalPlannedQuestions: number;
+  startedAt: string;
+  completedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  // Joined relation fields
+  jobTitle?: string;
+  companyName?: string;
+  candidateName?: string;
+  candidateHeadline?: string;
+  candidatePhoto?: string;
+  questions?: InterviewQuestion[];
+  answers?: InterviewAnswer[];
+  evaluation?: InterviewEvaluation;
+}
+

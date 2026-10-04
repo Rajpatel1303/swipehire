@@ -19,10 +19,15 @@ import {
   WorkMode,
   CompanySLAInfo,
   ConstructiveFeedback,
+  InterviewSession,
+  InterviewQuestion,
+  InterviewEvaluation,
+  ProctoringMetrics,
 } from "../types";
+import { SupabaseInterviewsService } from "../services/supabase/interviews";
 import { GeminiService } from "../services/geminiService";
 import { SupabaseService } from "../services/supabaseService";
-import { supabase } from "../services/supabaseClient";
+import { supabase, getAuthHeaders } from "../services/supabaseClient";
 import { calculateJobMatch } from "../utils/matchingEngine";
 import { DEFAULT_EMAIL_TEMPLATES, DEFAULT_WHATSAPP_TEMPLATES } from "../services/defaultTemplates";
 import { safeStorage } from "../utils/safeStorage";
@@ -138,7 +143,8 @@ export type ActiveView =
   | "company-email-connect"
   | "company-interviews"
   | "company-compare"
-  | "blind-marketplace";
+  | "blind-marketplace"
+  | "ai-interview-demo";
 
 interface AppContextType {
   // Supabase Live Status
@@ -252,6 +258,51 @@ interface AppContextType {
     applicationId: string,
     interviewDetails: InterviewDetails
   ) => void;
+  inviteCandidateToAIInterview: (
+    applicationId: string,
+    settings?: {
+      interviewType?: "ai_generated" | "company" | "hybrid" | "technical";
+      totalQuestions?: number;
+      companyQuestions?: string[];
+    }
+  ) => Promise<{ success: boolean; sessionId?: string; error?: string }>;
+  completeCandidateAIInterview: (
+    applicationId: string,
+    sessionId: string,
+    evaluation: any
+  ) => Promise<void>;
+
+  // Mandatory AI Interview Gateway & 1-Attempt Flow
+  interviewGateJob: Job | null;
+  openInterviewGate: (job: Job) => void;
+  closeInterviewGate: () => void;
+  activeInterviewSessionData: {
+    session: InterviewSession;
+    questions: InterviewQuestion[];
+    job: Job;
+    candidate: CandidateProfile;
+  } | null;
+  closeActiveInterviewSession: () => void;
+  isInitializingInterview: boolean;
+  startAIInterviewForJob: (job: Job) => Promise<{ success: boolean; error?: string }>;
+  submitApplicationWithCompletedInterview: (
+    job: Job,
+    sessionId: string,
+    evaluation: any,
+    qaHistory: any[],
+    proctoringMetrics?: ProctoringMetrics
+  ) => Promise<boolean>;
+  hasCandidateAppliedToJob: (jobId: string) => boolean;
+  interviewCompletionState: {
+    show: boolean;
+    jobTitle: string;
+    companyName: string;
+    score: number;
+    verdict: string;
+    integrityScore?: number;
+    proctoringSummary?: string;
+  } | null;
+  closeInterviewCompletionModal: () => void;
 
   // Reverse Hiring Marketplace (Blind Talent Bidding)
   blindTalentProfiles: BlindTalentProfile[];
@@ -417,10 +468,54 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return safeStorage.getJSON<NotificationItem[]>("swipehired_notifications", []);
   });
 
+  const addNotification = useCallback((
+    notif: Omit<NotificationItem, "id" | "timestamp" | "read">
+  ) => {
+    const newItem: NotificationItem = {
+      ...notif,
+      id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
+      timestamp: new Date().toISOString(),
+      read: false,
+    };
+    setNotifications((prev) => [newItem, ...prev]);
+    SupabaseService.saveNotification(newItem).catch(console.warn);
+  }, []);
+
   // Templates
   const [emailTemplates, setEmailTemplates] = useState<EmailTemplate[]>(DEFAULT_EMAIL_TEMPLATES);
   const [whatsAppTemplates, setWhatsAppTemplates] = useState<WhatsAppTemplate[]>(DEFAULT_WHATSAPP_TEMPLATES);
   const [adminReports, setAdminReports] = useState<AdminReport[]>([]);
+
+  // Mandatory AI Interview Gateway & Live Session State
+  const [interviewGateJob, setInterviewGateJob] = useState<Job | null>(null);
+  const [activeInterviewSessionData, setActiveInterviewSessionData] = useState<{
+    session: InterviewSession;
+    questions: InterviewQuestion[];
+    job: Job;
+    candidate: CandidateProfile;
+  } | null>(null);
+  const [isInitializingInterview, setIsInitializingInterview] = useState<boolean>(false);
+  const [interviewCompletionState, setInterviewCompletionState] = useState<{
+    show: boolean;
+    jobTitle: string;
+    companyName: string;
+    score: number;
+    verdict: string;
+    integrityScore?: number;
+    proctoringSummary?: string;
+  } | null>(null);
+
+  const closeInterviewGate = useCallback(() => {
+    setInterviewGateJob(null);
+  }, []);
+
+  const closeActiveInterviewSession = useCallback(() => {
+    setActiveInterviewSessionData(null);
+  }, []);
+
+  const closeInterviewCompletionModal = useCallback(() => {
+    setInterviewCompletionState(null);
+  }, []);
 
   // Hydrate state from Supabase on mount
   const refreshFromSupabase = useCallback(async () => {
@@ -1458,11 +1553,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const deleteJob = (id: string) => {
     const target = jobs.find((j) => j.id === id);
-    if (role === "company" && target && company.id && target.companyId !== company.id) {
+    if (role === "company" && target && company.id && target.companyId && target.companyId !== company.id) {
       console.error("[AppContext] Unauthorized delete: Job belongs to another company");
       return;
     }
     setJobs((prev) => prev.filter((j) => j.id !== id));
+    setApplications((prev) => prev.filter((a) => a.jobId !== id));
+    setTalentBids((prev) => prev.filter((b) => b.jobId !== id));
     SupabaseService.deleteJob(id).catch(console.warn);
   };
 
@@ -1718,9 +1815,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     );
   };
 
-  const deleteCandidate = (applicationId: string, deletePermanently = false) => {
+  const deleteCandidate = (applicationId: string, deletePermanently = true) => {
     if (deletePermanently) {
       setApplications((prev) => prev.filter((a) => a.id !== applicationId));
+      SupabaseService.deleteApplication(applicationId).catch(console.warn);
       return;
     }
 
@@ -1812,9 +1910,463 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
+  // Invite Candidate to AI Technical Interview (Google Gemma 4)
+  const inviteCandidateToAIInterview = async (
+    applicationId: string,
+    settings?: {
+      interviewType?: "ai_generated" | "company" | "hybrid" | "technical";
+      totalQuestions?: number;
+      companyQuestions?: string[];
+    }
+  ): Promise<{ success: boolean; sessionId?: string; error?: string }> => {
+    const targetApp = applications.find((a) => a.id === applicationId);
+    if (!targetApp) {
+      return { success: false, error: "Application not found" };
+    }
+
+    const matchedCand = allCandidates.find((c) => c.id === targetApp.candidateId);
+    const matchedJob = jobs.find((j) => j.id === targetApp.jobId);
+
+    try {
+      const headers = await getAuthHeaders({ "Content-Type": "application/json" });
+      const response = await fetch("/api/ai/interview/initialize", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          jobId: targetApp.jobId,
+          candidateId: targetApp.candidateId,
+          companyId: targetApp.companyId,
+          interviewType: settings?.interviewType || "ai_generated",
+          totalQuestions: settings?.totalQuestions || 3,
+          companyQuestions: settings?.companyQuestions || (targetApp.interviewQuestions?.length ? targetApp.interviewQuestions : []),
+          job: {
+            id: targetApp.jobId,
+            title: targetApp.jobTitle,
+            department: matchedJob?.department || "Engineering",
+            requiredSkills: matchedJob?.requiredSkills || targetApp.matchedSkills || targetApp.candidateSkills || [],
+            preferredSkills: matchedJob?.preferredSkills || [],
+            experience: matchedJob?.experience || `${targetApp.candidateExpYears || 2}+ years`,
+            description: matchedJob?.description || `${targetApp.jobTitle} position at ${targetApp.companyName}`,
+            responsibilities: matchedJob?.responsibilities || [],
+          },
+          candidate: {
+            id: targetApp.candidateId,
+            fullName: targetApp.candidateName,
+            headline: targetApp.candidateHeadline,
+            skills: targetApp.candidateSkills,
+            experience: targetApp.candidateExperienceList || matchedCand?.experience || [],
+            projects: targetApp.candidateProjectsList || matchedCand?.projects || [],
+            yearsOfExperience: targetApp.candidateExpYears || matchedCand?.yearsOfExperience || 2,
+          },
+        }),
+      });
+
+      const data = await response.json();
+      if (!data.success || !data.session?.id) {
+        throw new Error(data.error || "Failed to initialize AI interview session");
+      }
+
+      const sessionId = data.session.id;
+
+      setApplications((prev) =>
+        prev.map((app) => {
+          if (app.id !== applicationId) return app;
+          const nextApp: Application = {
+            ...app,
+            status: "interview",
+            aiInterviewSessionId: sessionId,
+            aiInterviewStatus: "invited",
+            lastUpdatedAt: new Date().toISOString(),
+            timeline: [
+              ...app.timeline,
+              {
+                status: "interview",
+                timestamp: new Date().toISOString(),
+                note: `Invited to AI Technical Interview (Google Gemma 4 · Session ID: ${sessionId})`,
+              },
+            ],
+          };
+          SupabaseService.saveApplication(nextApp).catch(console.warn);
+          return nextApp;
+        })
+      );
+
+      // Notify candidate
+      addNotification({
+        recipientId: targetApp.candidateId,
+        role: "candidate",
+        title: `🤖 AI Technical Interview: ${targetApp.companyName}`,
+        message: `You've been invited to complete an AI technical interview for "${targetApp.jobTitle}". Powered by Google Gemma 4 — take it whenever you're ready!`,
+        type: "interview",
+        linkAction: "applications",
+      });
+
+      // Notify recruiter / company
+      addNotification({
+        recipientId: targetApp.companyId,
+        role: "company",
+        title: `AI Interview Invitation Dispatched`,
+        message: `Interview invitation sent to ${targetApp.candidateName} for ${targetApp.jobTitle}.`,
+        type: "status",
+        linkAction: "applications",
+      });
+
+      triggerCelebration();
+
+      return { success: true, sessionId };
+    } catch (err: any) {
+      console.error("[inviteCandidateToAIInterview] Error:", err);
+      return { success: false, error: err.message || "Failed to invite to AI interview" };
+    }
+  };
+
+  // Complete Candidate AI Interview (called when candidate finishes interview)
+  const completeCandidateAIInterview = async (
+    applicationId: string,
+    sessionId: string,
+    evaluation: any
+  ): Promise<void> => {
+    const rawScore = evaluation?.overallScore ?? evaluation?.overall_score ?? 70;
+    const rawVerdict = evaluation?.verdict || "Recommended";
+
+    setApplications((prev) =>
+      prev.map((app) => {
+        if (app.id !== applicationId && app.aiInterviewSessionId !== sessionId) return app;
+        const nextApp: Application = {
+          ...app,
+          status: "interview",
+          aiInterviewSessionId: sessionId,
+          aiInterviewStatus: "completed",
+          aiInterviewScore: Number(rawScore),
+          aiInterviewVerdict: rawVerdict,
+          aiInterviewCompletedAt: new Date().toISOString(),
+          aiInterviewEvaluation: evaluation,
+          lastUpdatedAt: new Date().toISOString(),
+          timeline: [
+            ...app.timeline,
+            {
+              status: "interview",
+              timestamp: new Date().toISOString(),
+              note: `Gemma 4 AI Interview Completed: ${rawScore}% Score (${rawVerdict})`,
+            },
+          ],
+        };
+        SupabaseService.saveApplication(nextApp).catch(console.warn);
+        return nextApp;
+      })
+    );
+
+    const app = applications.find((a) => a.id === applicationId || a.aiInterviewSessionId === sessionId);
+    if (app) {
+      addNotification({
+        recipientId: app.companyId,
+        role: "company",
+        title: `🎯 AI Interview Completed: ${app.candidateName}`,
+        message: `${app.candidateName} scored ${rawScore}% (${rawVerdict}) on their AI Technical Interview for ${app.jobTitle}. View the 5-axis report now.`,
+        type: "interview",
+        linkAction: "applications",
+      });
+
+      addNotification({
+        recipientId: app.candidateId,
+        role: "candidate",
+        title: `🎉 AI Interview Submitted!`,
+        message: `Your technical evaluation for ${app.jobTitle} at ${app.companyName} was scored and submitted directly to the recruiter.`,
+        type: "status",
+        linkAction: "applications",
+      });
+    }
+  };
+
+  // Check if candidate has already applied/completed interview for a specific job (1-attempt rule)
+  const hasCandidateAppliedToJob = useCallback(
+    (jobId: string): boolean => {
+      return applications.some(
+        (a) =>
+          a.jobId === jobId &&
+          !a.hiddenFromCompany &&
+          !a.deletedByCompany &&
+          (a.candidateId === candidate.id ||
+            (a.candidateEmail && candidate.email && a.candidateEmail.toLowerCase() === candidate.email.toLowerCase()))
+      );
+    },
+    [applications, candidate]
+  );
+
+  // Open Mandatory Pre-Interview Gateway Modal (enforcing 1-attempt limit)
+  const openInterviewGate = useCallback(
+    (targetJob: Job) => {
+      if (hasCandidateAppliedToJob(targetJob.id)) {
+        addNotification({
+          recipientId: candidate.id,
+          role: "candidate",
+          title: "⚠️ 1-Attempt Limit Reached",
+          message: `You have already completed the technical interview and submitted your application for ${targetJob.title} at ${targetJob.companyName}. Each candidate is permitted only 1 attempt per job.`,
+          type: "status",
+          linkAction: "applications",
+        });
+        return;
+      }
+      setInterviewGateJob(targetJob);
+    },
+    [hasCandidateAppliedToJob, candidate, addNotification]
+  );
+
+  // Initialize and Launch Live AI Technical Interview for Job
+  const startAIInterviewForJob = async (targetJob: Job): Promise<{ success: boolean; error?: string }> => {
+    if (hasCandidateAppliedToJob(targetJob.id)) {
+      return { success: false, error: "You have already completed the interview and applied for this job." };
+    }
+
+    setIsInitializingInterview(true);
+    try {
+      const headers = await getAuthHeaders({ "Content-Type": "application/json" });
+      const response = await fetch("/api/ai/interview/initialize", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          jobId: targetJob.id,
+          candidateId: candidate.id,
+          companyId: targetJob.companyId,
+          interviewType: "ai_generated",
+          totalQuestions: 3,
+          job: {
+            id: targetJob.id,
+            title: targetJob.title,
+            requiredSkills: targetJob.requiredSkills || [],
+            experience: targetJob.experience,
+          },
+          candidate: {
+            id: candidate.id,
+            fullName: candidate.fullName,
+            headline: candidate.headline,
+            skills: candidate.skills,
+            yearsOfExperience: candidate.yearsOfExperience || 2,
+          },
+        }),
+      });
+
+      const data = await response.json();
+      if (!data.success || !data.session) {
+        throw new Error(data.error || "Failed to initialize interview session");
+      }
+
+      let full: InterviewSession | null = null;
+      try {
+        full = await SupabaseInterviewsService.getSession(data.session.id);
+      } catch (e) {
+        console.warn("[startAIInterviewForJob] Direct fetch fallback:", e);
+      }
+
+      const qList: InterviewQuestion[] =
+        full?.questions && full.questions.length > 0
+          ? full.questions
+          : data.questions || [
+              {
+                id: "iq_1",
+                sessionId: data.session.id,
+                questionOrder: 1,
+                questionText: `In your engineering work with ${(targetJob.requiredSkills || ["TypeScript"])[0]}, what design patterns and performance considerations did you prioritize?`,
+                category: "Architecture & Core Skills",
+                difficulty: "Practical",
+                idealCriteria: "Demonstrates practical production experience",
+                source: "ai_generated",
+                createdAt: new Date().toISOString(),
+              },
+            ];
+
+      const sessionObj: InterviewSession = full || {
+        id: data.session.id,
+        companyId: targetJob.companyId,
+        candidateId: candidate.id,
+        jobId: targetJob.id,
+        interviewType: "ai_generated",
+        mode: "chat",
+        status: "in_progress",
+        currentQuestionIndex: 1,
+        totalPlannedQuestions: 3,
+        startedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        questions: qList,
+      };
+
+      setInterviewGateJob(null);
+      setActiveInterviewSessionData({
+        session: sessionObj,
+        questions: qList,
+        job: targetJob,
+        candidate,
+      });
+
+      return { success: true };
+    } catch (err: any) {
+      console.error("[startAIInterviewForJob] Error:", err);
+      return { success: false, error: err.message || "Failed to initialize interview" };
+    } finally {
+      setIsInitializingInterview(false);
+    }
+  };
+
+  // Submit Application with Completed AI Technical Interview
+  const submitApplicationWithCompletedInterview = async (
+    targetJob: Job,
+    sessionId: string,
+    evaluation: any,
+    qaHistory: any[] = [],
+    proctoringMetrics?: ProctoringMetrics
+  ): Promise<boolean> => {
+    try {
+      const rawScore = Number(evaluation?.overallScore ?? evaluation?.overall_score ?? 75);
+      const rawVerdict = evaluation?.verdict || "Recommended";
+      const rawIntegrity = proctoringMetrics?.integrityScore ?? evaluation?.integrity_score ?? evaluation?.integrityScore ?? 100;
+
+      const interviewReasons = Array.isArray(evaluation?.strengths) && evaluation.strengths.length > 0
+        ? evaluation.strengths
+        : [`Demonstrated technical depth in ${(targetJob.requiredSkills || []).slice(0, 3).join(", ") || "core technologies"}`];
+      const interviewConcerns = Array.isArray(evaluation?.areas_to_explore)
+        ? evaluation.areas_to_explore
+        : Array.isArray(evaluation?.areasToExplore)
+        ? evaluation.areasToExplore
+        : [];
+      const interviewSummary = evaluation?.ai_summary || evaluation?.aiSummary || "Completed AI Technical Interview.";
+
+      const enrichedEvaluation = {
+        ...evaluation,
+        qaHistory: Array.isArray(qaHistory) && qaHistory.length > 0 ? qaHistory : evaluation?.qaHistory || [],
+        proctoringMetrics: proctoringMetrics || evaluation?.proctoringMetrics || undefined,
+      };
+
+      const newAppId = `app_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      const newApp: Application = {
+        id: newAppId,
+        jobId: targetJob.id,
+        candidateId: candidate.id,
+        candidateName: candidate.fullName,
+        candidateHeadline: candidate.headline,
+        candidatePhoto: candidate.profilePhoto,
+        candidateLocation: candidate.location,
+        candidateSkills: candidate.skills,
+        candidateExpYears: candidate.yearsOfExperience,
+        candidateEmail: candidate.email,
+        candidatePhone: candidate.phone,
+        candidateBio: candidate.bio,
+        candidateExpectedSalary: candidate.expectedSalary,
+        candidateWorkPreference: candidate.workPreference,
+        candidateExperienceList: candidate.experience,
+        candidateEducationList: candidate.education,
+        candidateProjectsList: candidate.projects,
+        jobTitle: targetJob.title,
+        companyId: targetJob.companyId,
+        companyName: targetJob.companyName,
+        companyLogo: targetJob.companyLogo,
+        jobLocation: targetJob.location,
+        jobSalary: targetJob.salary,
+        jobWorkMode: targetJob.workMode,
+        status: "interview",
+        appliedAt: new Date().toISOString(),
+        lastUpdatedAt: new Date().toISOString(),
+        matchScore: rawScore,
+        matchReasons: interviewReasons,
+        matchConcerns: interviewConcerns,
+        aiSummary: interviewSummary,
+        aiInterviewSessionId: sessionId,
+        aiInterviewStatus: "completed",
+        aiInterviewScore: rawScore,
+        aiInterviewVerdict: rawVerdict,
+        aiInterviewCompletedAt: new Date().toISOString(),
+        aiInterviewEvaluation: enrichedEvaluation,
+        aiInterviewQAs: Array.isArray(qaHistory) && qaHistory.length > 0 ? qaHistory : undefined,
+        aiInterviewIntegrityScore: rawIntegrity,
+        proctoringMetrics: proctoringMetrics || undefined,
+        timeline: [
+          {
+            status: "applied",
+            timestamp: new Date().toISOString(),
+            note: "Applied via SwipeHired Career Portal",
+          },
+          {
+            status: "interview",
+            timestamp: new Date().toISOString(),
+            note: `Completed AI Technical Interview: ${rawScore}% Score (${rawVerdict}) • 🛡️ Integrity: ${rawIntegrity}%`,
+          },
+        ],
+      };
+
+      setApplications((prev) => [newApp, ...prev.filter((a) => a.id !== newApp.id)]);
+      SupabaseService.saveApplication(newApp).catch(console.warn);
+
+      // Also ensure answers are recorded in interview_answers in Supabase
+      if (sessionId && Array.isArray(qaHistory) && qaHistory.length > 0) {
+        for (const item of qaHistory) {
+          try {
+            SupabaseInterviewsService.saveAnswer({
+              sessionId,
+              questionId: `iq_${Math.random().toString(36).substring(2, 9)}`,
+              candidateId: candidate.id,
+              questionText: item.question,
+              answerText: item.answer,
+              answerQualityScore: item.qualityScore ?? 0.8,
+              aiAssessment: item.assessment,
+            }).catch(() => {});
+          } catch {}
+        }
+      }
+
+      const integrityText = ` • 🛡️ Integrity: ${rawIntegrity}%`;
+      addNotification({
+        recipientId: candidate.id,
+        role: "candidate",
+        title: `🎯 Interview Completed for ${targetJob.companyName}!`,
+        message: `Your technical evaluation (Score: ${rawScore}% • ${rawVerdict}${integrityText}) and application for "${targetJob.title}" have been submitted directly to their hiring team.`,
+        type: "application",
+        linkAction: "applications",
+      });
+
+      addNotification({
+        recipientId: targetJob.companyId,
+        role: "company",
+        title: `⚡ Interview Completed: ${candidate.fullName} applied for ${targetJob.title}!`,
+        message: `Candidate finished AI Technical Interview with Score: ${rawScore}% (${rawVerdict})${integrityText}. Review their scorecard and decide on the next round.`,
+        type: "application",
+        linkAction: "candidates",
+      });
+
+      triggerCelebration();
+
+      setActiveInterviewSessionData(null);
+      setInterviewCompletionState({
+        show: true,
+        jobTitle: targetJob.title,
+        companyName: targetJob.companyName,
+        score: rawScore,
+        verdict: rawVerdict,
+        integrityScore: rawIntegrity,
+        proctoringSummary: proctoringMetrics?.summary || "AI Technical Interview Verified Clean",
+      });
+
+      return true;
+    } catch (err: any) {
+      console.error("[submitApplicationWithCompletedInterview] Error:", err);
+      // Guarantee modal closes and candidate sees completion feedback even on failure
+      setActiveInterviewSessionData(null);
+      setInterviewCompletionState({
+        show: true,
+        jobTitle: targetJob?.title || "Role",
+        companyName: targetJob?.companyName || "Company",
+        score: Number(evaluation?.overallScore ?? evaluation?.overall_score ?? 75),
+        verdict: evaluation?.verdict || "Recommended",
+        integrityScore: 100,
+        proctoringSummary: "AI Technical Interview Submitted",
+      });
+      return false;
+    }
+  };
+
   // Delete Application
   const deleteApplication = (applicationId: string) => {
     setApplications((prev) => prev.filter((a) => a.id !== applicationId));
+    SupabaseService.deleteApplication(applicationId).catch(console.warn);
   };
 
   // Explicitly Expire & Lock Application
@@ -1845,7 +2397,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Purge All Expired / Inaccessible Applications
   const purgeExpiredApplications = () => {
+    const expiredIds = applications
+      .filter((a) => a.status === "expired" || a.isExpired)
+      .map((a) => a.id);
     setApplications((prev) => prev.filter((a) => a.status !== "expired" && !a.isExpired));
+    expiredIds.forEach((id) => {
+      SupabaseService.deleteApplication(id).catch(console.warn);
+    });
     triggerCelebration();
   };
 
@@ -1922,40 +2480,52 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const handleSwipeRight = async (jobId: string) => {
     const job = jobs.find((j) => j.id === jobId);
+    if (!job) return;
+
+    if (hasCandidateAppliedToJob(jobId)) {
+      addNotification({
+        recipientId: candidate.id,
+        role: "candidate",
+        title: "⚠️ 1-Attempt Limit Reached",
+        message: `You have already completed the technical interview and applied for ${job.title} at ${job.companyName}. Each candidate is permitted only 1 attempt per job.`,
+        type: "status",
+        linkAction: "applications",
+      });
+      return;
+    }
+
     const newSwipe: SwipeInteraction = {
       candidateId: candidate.id,
       jobId,
       action: "applied",
       timestamp: new Date().toISOString(),
-      jobTags: job?.requiredSkills,
-      workMode: job?.workMode,
+      jobTags: job.requiredSkills,
+      workMode: job.workMode,
     };
     setSwipes((prev) => [...prev, newSwipe]);
     SupabaseService.logSwipe(newSwipe).catch(console.warn);
 
     // Update candidate's learned preferences
-    if (job) {
-      updateCandidate({
-        learnedPreferences: {
-          preferredSkills: Array.from(
-            new Set([...(candidate.learnedPreferences?.preferredSkills || []), ...job.requiredSkills])
-          ).slice(0, 10),
-          dislikedSkills: candidate.learnedPreferences?.dislikedSkills || [],
-          preferredLocations: Array.from(
-            new Set([
-              ...(candidate.learnedPreferences?.preferredLocations || []),
-              job.location.split(",")[0].trim(),
-            ])
-          ),
-          preferredWorkModes: Array.from(
-            new Set([...(candidate.learnedPreferences?.preferredWorkModes || []), job.workMode])
-          ),
-          swipesCount: (candidate.learnedPreferences?.swipesCount || 0) + 1,
-        },
-      });
-    }
+    updateCandidate({
+      learnedPreferences: {
+        preferredSkills: Array.from(
+          new Set([...(candidate.learnedPreferences?.preferredSkills || []), ...job.requiredSkills])
+        ).slice(0, 10),
+        dislikedSkills: candidate.learnedPreferences?.dislikedSkills || [],
+        preferredLocations: Array.from(
+          new Set([
+            ...(candidate.learnedPreferences?.preferredLocations || []),
+            job.location.split(",")[0].trim(),
+          ])
+        ),
+        preferredWorkModes: Array.from(
+          new Set([...(candidate.learnedPreferences?.preferredWorkModes || []), job.workMode])
+        ),
+        swipesCount: (candidate.learnedPreferences?.swipesCount || 0) + 1,
+      },
+    });
 
-    await applyToJob(jobId);
+    openInterviewGate(job);
   };
 
   const handleSwipe = async (jobId: string, direction: "left" | "right") => {
@@ -1988,8 +2558,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Dynamic Radar Deck - unswiped matching jobs prioritized by highest match
   const radarDeck = useMemo(() => {
     const interactedJobIds = new Set(swipes.map((s) => s.jobId));
-    return candidateMatchedJobs.filter((j) => !interactedJobIds.has(j.id));
-  }, [candidateMatchedJobs, swipes]);
+    const activeAppliedJobIds = new Set(
+      applications
+        .filter(
+          (a) =>
+            !a.hiddenFromCompany &&
+            !a.deletedByCompany &&
+            (a.candidateId === candidate.id ||
+              (a.candidateEmail && candidate.email && a.candidateEmail.toLowerCase() === candidate.email.toLowerCase()))
+        )
+        .map((a) => a.jobId)
+    );
+    return candidateMatchedJobs.filter(
+      (j) => !interactedJobIds.has(j.id) && !activeAppliedJobIds.has(j.id)
+    );
+  }, [candidateMatchedJobs, swipes, applications, candidate]);
 
   const recommendationNote = useMemo(() => {
     const swipesCount = candidate.learnedPreferences?.swipesCount || 0;
@@ -2006,19 +2589,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   // Notifications helpers
-  const addNotification = (
-    notif: Omit<NotificationItem, "id" | "timestamp" | "read">
-  ) => {
-    const newItem: NotificationItem = {
-      ...notif,
-      id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
-      timestamp: new Date().toISOString(),
-      read: false,
-    };
-    setNotifications((prev) => [newItem, ...prev]);
-    SupabaseService.saveNotification(newItem).catch(console.warn);
-  };
-
   const markNotificationAsRead = (id: string) => {
     setNotifications((prev) =>
       prev.map((n) => {
@@ -2732,6 +3302,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         purgeExpiredApplications,
         simulateFastForwardApplication,
         scheduleInterview,
+        inviteCandidateToAIInterview,
+        completeCandidateAIInterview,
+        interviewGateJob,
+        openInterviewGate,
+        closeInterviewGate,
+        activeInterviewSessionData,
+        closeActiveInterviewSession,
+        isInitializingInterview,
+        startAIInterviewForJob,
+        submitApplicationWithCompletedInterview,
+        hasCandidateAppliedToJob,
+        interviewCompletionState,
+        closeInterviewCompletionModal,
         blindTalentProfiles,
         talentBids,
         updateBlindTalentProfile,

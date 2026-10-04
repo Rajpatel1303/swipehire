@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import { GeminiService } from "../../services/geminiService";
-import { Job, WorkMode } from "../../types";
+import { Job, WorkMode, InterviewType, InterviewSettings } from "../../types";
 import { safeStorage } from "../../utils/safeStorage";
 import { CustomSelect } from "../common/CustomSelect";
 
@@ -46,6 +46,14 @@ export const CompanyAddJobModal: React.FC<CompanyAddJobModalProps> = ({ isOpen, 
   const [requirements, setRequirements] = useState<string[]>([]);
   const [requiredSkills, setRequiredSkills] = useState<string[]>([]);
   const [newSkill, setNewSkill] = useState("");
+
+  // Interview Setup Strategy (Spec Section 2)
+  const [interviewType, setInterviewType] = useState<InterviewType>("ai_generated");
+  const [companyQuestions, setCompanyQuestions] = useState<string[]>([
+    "Explain how you design scalable APIs and handle unexpected latency.",
+    "Walk us through a critical bug you investigated and fixed in production."
+  ]);
+  const [customQuestionInput, setCustomQuestionInput] = useState("");
 
   // Draft Autosave tracking
   const [hasLoadedDraft, setHasLoadedDraft] = useState(false);
@@ -197,6 +205,11 @@ export const CompanyAddJobModal: React.FC<CompanyAddJobModalProps> = ({ isOpen, 
       preferredSkills: ["GraphQL", "Next.js", "Docker"],
       status: "draft",
       matchScore: 90,
+      interviewSettings: {
+        type: interviewType,
+        questions: interviewType === "ai_generated" ? [] : companyQuestions,
+        totalQuestions: 5,
+      },
     });
 
     // Clear the transient draft from storage once saved to jobs
@@ -243,6 +256,11 @@ export const CompanyAddJobModal: React.FC<CompanyAddJobModalProps> = ({ isOpen, 
       preferredSkills: ["GraphQL", "Next.js", "Docker"],
       status: "active",
       matchScore: 94,
+      interviewSettings: {
+        type: interviewType,
+        questions: interviewType === "ai_generated" ? [] : companyQuestions,
+        totalQuestions: 5,
+      },
     });
 
     // Clear draft on publish
@@ -558,6 +576,137 @@ export const CompanyAddJobModal: React.FC<CompanyAddJobModalProps> = ({ isOpen, 
                   placeholder="Describe the mission, team, and day-to-day work..."
                   className="w-full p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl text-xs text-slate-900 leading-relaxed focus:border-slate-900 focus:outline-none font-medium"
                 />
+              </div>
+
+              {/* Interview Setup When Creating a Job (Spec Section 2) */}
+              <div className="p-4 bg-gradient-to-br from-indigo-50/70 via-slate-50 to-white rounded-2xl border-2 border-indigo-100 space-y-3.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-indigo-600" />
+                    <span className="text-xs font-black uppercase tracking-wider text-indigo-950">
+                      Interview Setup
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-black text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-md">
+                    Google Gemma 4 Powered
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600">
+                  How should SwipeHired conduct technical screening interviews with candidates for this job?
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  {/* Option 2: AI Generated (Recommended) */}
+                  <button
+                    type="button"
+                    onClick={() => setInterviewType("ai_generated")}
+                    className={`p-3 rounded-xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between ${
+                      interviewType === "ai_generated"
+                        ? "border-indigo-600 bg-indigo-50/90 shadow-xs"
+                        : "border-slate-200 bg-white hover:border-slate-300"
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-black text-slate-900">AI Generated</span>
+                        <span className="text-[9px] font-black uppercase px-1.5 py-0.5 bg-indigo-600 text-white rounded">Recommended</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 leading-tight">
+                        Gemma dynamically writes questions tailored to each candidate's actual projects and skills.
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* Option 1: Company Provides */}
+                  <button
+                    type="button"
+                    onClick={() => setInterviewType("company_questions")}
+                    className={`p-3 rounded-xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between ${
+                      interviewType === "company_questions"
+                        ? "border-indigo-600 bg-indigo-50/90 shadow-xs"
+                        : "border-slate-200 bg-white hover:border-slate-300"
+                    }`}
+                  >
+                    <div>
+                      <div className="text-xs font-black text-slate-900 mb-1">Company Questions</div>
+                      <p className="text-[10px] text-slate-500 leading-tight">
+                        You define specific interview questions used for every candidate.
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* Option 3: Hybrid */}
+                  <button
+                    type="button"
+                    onClick={() => setInterviewType("hybrid")}
+                    className={`p-3 rounded-xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between ${
+                      interviewType === "hybrid"
+                        ? "border-indigo-600 bg-indigo-50/90 shadow-xs"
+                        : "border-slate-200 bg-white hover:border-slate-300"
+                    }`}
+                  >
+                    <div>
+                      <div className="text-xs font-black text-slate-900 mb-1">Hybrid Interview</div>
+                      <p className="text-[10px] text-slate-500 leading-tight">
+                        Your custom questions combined with AI questions and dynamic follow-ups.
+                      </p>
+                    </div>
+                  </button>
+                </div>
+
+                {/* Custom Questions List for Option 1 & 3 */}
+                {(interviewType === "company_questions" || interviewType === "hybrid") && (
+                  <div className="pt-2 space-y-2 border-t border-indigo-100/60">
+                    <label className="block text-[10px] font-black uppercase tracking-wider text-slate-700">
+                      Company Interview Questions ({companyQuestions.length})
+                    </label>
+                    <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                      {companyQuestions.map((q, idx) => (
+                        <div key={idx} className="flex items-start justify-between gap-2 p-2 bg-white rounded-lg border border-slate-200 text-xs">
+                          <span className="font-bold text-slate-500 text-[11px] shrink-0">Q{idx + 1}:</span>
+                          <span className="text-slate-800 text-[11px] font-medium flex-1">{q}</span>
+                          <button
+                            type="button"
+                            onClick={() => setCompanyQuestions(companyQuestions.filter((_, i) => i !== idx))}
+                            className="text-slate-400 hover:text-rose-500 cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2 pt-1">
+                      <input
+                        type="text"
+                        value={customQuestionInput}
+                        onChange={(e) => setCustomQuestionInput(e.target.value)}
+                        placeholder="Add a question (e.g. How did you handle JWT authentication?)..."
+                        className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:border-indigo-600 focus:outline-none"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (customQuestionInput.trim()) {
+                              setCompanyQuestions([...companyQuestions, customQuestionInput.trim()]);
+                              setCustomQuestionInput("");
+                            }
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (customQuestionInput.trim()) {
+                            setCompanyQuestions([...companyQuestions, customQuestionInput.trim()]);
+                            setCustomQuestionInput("");
+                          }
+                        }}
+                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold cursor-pointer"
+                      >
+                        Add Q
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Action Buttons */}

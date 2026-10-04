@@ -409,7 +409,7 @@ export const CandidateAuth: React.FC<CandidateAuthProps> = ({ initialMode, isSig
             <form onSubmit={mode === "signup" ? handleSignup : handleLogin} className="space-y-4">
               {mode === "signup" && (
                 <div>
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1.5">Full Name</label>
+                  <label htmlFor="candidate-fullname-input" className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1.5">Full Name</label>
                   <div className="relative">
                     <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input
@@ -426,7 +426,7 @@ export const CandidateAuth: React.FC<CandidateAuthProps> = ({ initialMode, isSig
               )}
 
               <div>
-                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1.5">Email Address</label>
+                <label htmlFor="candidate-email-input" className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1.5">Email Address</label>
                 <div className="relative">
                   <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
@@ -443,7 +443,7 @@ export const CandidateAuth: React.FC<CandidateAuthProps> = ({ initialMode, isSig
 
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700">Password</label>
+                  <label htmlFor="candidate-password-input" className="block text-[10px] font-black uppercase tracking-widest text-slate-700">Password</label>
                   {mode === "login" && (
                     <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 hover:text-emerald-700 cursor-pointer">
                       Min 6 characters
@@ -466,7 +466,7 @@ export const CandidateAuth: React.FC<CandidateAuthProps> = ({ initialMode, isSig
 
               {mode === "signup" && (
                 <div>
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1.5">Confirm Password</label>
+                  <label htmlFor="candidate-confirm-password-input" className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1.5">Confirm Password</label>
                   <div className="relative">
                     <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input

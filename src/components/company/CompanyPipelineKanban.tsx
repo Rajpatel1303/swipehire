@@ -21,6 +21,7 @@ import {
   GripVertical,
   MoveRight,
   Info,
+  Bot,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useApp } from "../../context/AppContext";
@@ -48,7 +49,12 @@ export const CompanyPipelineKanban: React.FC = () => {
   } = useApp();
 
   const companyJobs = jobs.filter((j) => !company.id || j.companyId === company.id);
-  const companyApplications = applications.filter((a) => !company.id || a.companyId === company.id);
+  const companyApplications = applications.filter(
+    (a) =>
+      (!company.id || a.companyId === company.id) &&
+      !a.hiddenFromCompany &&
+      !a.deletedByCompany
+  );
 
   const [selectedJobId, setSelectedJobId] = useState<string>("all");
   const [mobileActiveStage, setMobileActiveStage] = useState<ApplicationStatus | "all">("all");
@@ -354,17 +360,37 @@ export const CompanyPipelineKanban: React.FC = () => {
                               </div>
                             </div>
 
-                            <button
-                              onClick={() => {
-                                const job = jobs.find((j) => j.id === app.jobId);
-                                if (job) setSelectedJobForModal(job);
-                              }}
-                              className="px-1.5 py-0.5 text-[9px] font-black bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-md hover:bg-emerald-100 transition-colors cursor-pointer flex items-center gap-0.5 shrink-0"
-                              title="View Full AI Evaluation"
-                            >
-                              <Sparkles className="w-2.5 h-2.5 text-emerald-600" />
-                              <span>{app.matchScore}%</span>
-                            </button>
+                            <div className="flex items-center gap-1 shrink-0">
+                              {app.aiInterviewStatus === "completed" && (
+                                <div
+                                  className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 text-[9px] font-black shrink-0"
+                                  title={`Google Gemma 4 AI Interview: ${app.aiInterviewScore || 75}% · ${app.aiInterviewVerdict || "Recommended"}`}
+                                >
+                                  <Bot className="w-2.5 h-2.5 text-indigo-600" />
+                                  <span>Gemma: {app.aiInterviewScore || 75}%</span>
+                                </div>
+                              )}
+                              {app.aiInterviewStatus === "invited" && (
+                                <div
+                                  className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-50 border border-amber-300 text-amber-800 text-[9px] font-black shrink-0 animate-pulse"
+                                  title="Candidate has been invited to AI Technical Interview"
+                                >
+                                  <Bot className="w-2.5 h-2.5 text-amber-600" />
+                                  <span>AI Invited</span>
+                                </div>
+                              )}
+                              <button
+                                onClick={() => {
+                                  const job = jobs.find((j) => j.id === app.jobId);
+                                  if (job) setSelectedJobForModal(job);
+                                }}
+                                className="px-1.5 py-0.5 text-[9px] font-black bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-md hover:bg-emerald-100 transition-colors cursor-pointer flex items-center gap-0.5 shrink-0"
+                                title="View Full AI Evaluation"
+                              >
+                                <Sparkles className="w-2.5 h-2.5 text-emerald-600" />
+                                <span>{app.matchScore}%</span>
+                              </button>
+                            </div>
                           </div>
 
                           {/* Skills & Countdown */}

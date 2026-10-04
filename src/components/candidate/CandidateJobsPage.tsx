@@ -16,6 +16,7 @@ import {
   Target,
   Briefcase,
   Layers,
+  Bot,
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import { CandidateJobDetailModal } from "./CandidateJobDetailModal";
@@ -24,7 +25,7 @@ import { calculateJobMatch } from "../../utils/matchingEngine";
 import { CustomSelect } from "../common/CustomSelect";
 
 export const CandidateJobsPage: React.FC = () => {
-  const { jobs, candidate, applications, handleSwipe } = useApp();
+  const { jobs, candidate, applications, handleSwipe, openInterviewGate, hasCandidateAppliedToJob } = useApp();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [matchFilterType, setMatchFilterType] = useState<"matched_all" | "skills" | "location" | "role" | "all_jobs">("matched_all");
@@ -317,7 +318,7 @@ export const CandidateJobsPage: React.FC = () => {
         /* Grid Layout */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredJobs.map((job) => {
-            const isApplied = applications.some((a) => a.jobId === job.id);
+            const isApplied = hasCandidateAppliedToJob(job.id);
             const matchedSkillsList = job.matchedSkills || [];
             return (
               <div
@@ -414,22 +415,25 @@ export const CandidateJobsPage: React.FC = () => {
 
                   <button
                     disabled={isApplied}
-                    onClick={() => handleSwipe(job.id, "right")}
+                    onClick={() => {
+                      if (isApplied) return;
+                      openInterviewGate(job);
+                    }}
                     className={`px-5 py-2.5 rounded-full text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${
                       isApplied
-                        ? "bg-emerald-50 text-emerald-800 border border-emerald-200 cursor-not-allowed"
-                        : "bg-emerald-500 hover:bg-emerald-600 text-white shadow-md shadow-emerald-500/20"
+                        ? "bg-slate-100 text-slate-500 border border-slate-200 cursor-not-allowed"
+                        : "bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white shadow-md shadow-indigo-600/20 hover:scale-[1.02]"
                     }`}
                   >
                     {isApplied ? (
                       <>
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Applied</span>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Applied (Interview Done)</span>
                       </>
                     ) : (
                       <>
-                        <Send className="w-3.5 h-3.5" />
-                        <span>1-Click Apply</span>
+                        <Bot className="w-3.5 h-3.5 text-indigo-200" />
+                        <span>Interview &amp; Apply</span>
                       </>
                     )}
                   </button>
@@ -442,7 +446,7 @@ export const CandidateJobsPage: React.FC = () => {
         /* List Layout */
         <div className="bg-white rounded-3xl border-2 border-slate-200 shadow-xs divide-y divide-slate-100 overflow-hidden">
           {filteredJobs.map((job) => {
-            const isApplied = applications.some((a) => a.jobId === job.id);
+            const isApplied = hasCandidateAppliedToJob(job.id);
             return (
               <div
                 key={job.id}
@@ -486,14 +490,27 @@ export const CandidateJobsPage: React.FC = () => {
 
                   <button
                     disabled={isApplied}
-                    onClick={() => handleSwipe(job.id, "right")}
+                    onClick={() => {
+                      if (isApplied) return;
+                      openInterviewGate(job);
+                    }}
                     className={`px-5 py-2.5 rounded-full text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${
                       isApplied
-                        ? "bg-emerald-50 text-emerald-800 border border-emerald-200 cursor-not-allowed"
-                        : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+                        ? "bg-slate-100 text-slate-500 border border-slate-200 cursor-not-allowed"
+                        : "bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white shadow-xs"
                     }`}
                   >
-                    {isApplied ? "Applied" : "1-Click Apply"}
+                    {isApplied ? (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Applied</span>
+                      </>
+                    ) : (
+                      <>
+                        <Bot className="w-3.5 h-3.5 text-indigo-200" />
+                        <span>Interview &amp; Apply</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
@@ -506,9 +523,15 @@ export const CandidateJobsPage: React.FC = () => {
       <CandidateJobDetailModal
         job={selectedJobModal}
         onClose={() => setSelectedJobModal(null)}
-        onApply={(jobId) => handleSwipe(jobId, "right")}
+        onApply={(jobId) => {
+          const target = jobs.find((j) => j.id === jobId);
+          if (target) {
+            setSelectedJobModal(null);
+            openInterviewGate(target);
+          }
+        }}
         isApplied={
-          selectedJobModal ? applications.some((a) => a.jobId === selectedJobModal.id) : false
+          selectedJobModal ? hasCandidateAppliedToJob(selectedJobModal.id) : false
         }
       />
     </div>

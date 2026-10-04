@@ -1,6 +1,7 @@
 import { ParsedResumeResult } from "./types";
 import type { ParsingProgressCallback, AIResumePayload } from "../resume";
 import { ResumeVerifier } from "../resume/resumeVerifier";
+import { getAuthHeaders } from "../supabase/client";
 
 export class ResumeParser {
   /**
@@ -49,9 +50,10 @@ export class ResumeParser {
           const { BrowserResumeParser } = await import("../resume/browserResumeParser");
           const aiPayload = BrowserResumeParser.toAIPayload(extractionResult, candidateName);
 
+          const headers = await getAuthHeaders({ "Content-Type": "application/json" });
           response = await fetch("/api/ai/parse-resume", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers,
             body: JSON.stringify({
               fullText: clientExtractedText,
               payload: aiPayload,
@@ -61,6 +63,7 @@ export class ResumeParser {
           });
         } else {
           // Dual-pass server fallback: upload file directly
+          const headers = await getAuthHeaders();
           const formData = new FormData();
           formData.append("file", file);
           if (candidateName) formData.append("candidateName", candidateName);
@@ -69,6 +72,7 @@ export class ResumeParser {
 
           response = await fetch("/api/ai/parse-resume", {
             method: "POST",
+            headers,
             body: formData,
           });
         }
@@ -90,9 +94,10 @@ export class ResumeParser {
           onProgress("sending-to-ai", "Analyzing resume text with Google Gemma 4...", 50);
         }
 
+        const headers = await getAuthHeaders({ "Content-Type": "application/json" });
         const response = await fetch("/api/ai/parse-resume", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify({ fullText: input, candidateName }),
         });
 

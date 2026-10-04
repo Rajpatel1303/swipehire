@@ -374,7 +374,7 @@ export const CompanyAuth: React.FC<CompanyAuthProps> = ({ initialMode, isSignup 
               {mode === "signup" && (
                 <>
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1.5">Company Name</label>
+                    <label htmlFor="company-name-input" className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1.5">Company Name</label>
                     <div className="relative">
                       <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                       <input
@@ -390,7 +390,7 @@ export const CompanyAuth: React.FC<CompanyAuthProps> = ({ initialMode, isSignup 
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1.5">Your Name (Recruiter / Hiring Lead)</label>
+                    <label htmlFor="company-contact-input" className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1.5">Your Name (Recruiter / Hiring Lead)</label>
                     <div className="relative">
                       <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                       <input
@@ -408,7 +408,7 @@ export const CompanyAuth: React.FC<CompanyAuthProps> = ({ initialMode, isSignup 
               )}
 
               <div>
-                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1.5">Work Email</label>
+                <label htmlFor="company-email-input" className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1.5">Work Email</label>
                 <div className="relative">
                   <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
@@ -425,7 +425,7 @@ export const CompanyAuth: React.FC<CompanyAuthProps> = ({ initialMode, isSignup 
 
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700">Password</label>
+                  <label htmlFor="company-password-input" className="block text-[10px] font-black uppercase tracking-widest text-slate-700">Password</label>
                   {mode === "login" && (
                     <span className="text-[10px] font-black uppercase tracking-widest text-sky-600 hover:text-sky-700 cursor-pointer">
                       Min 6 characters
@@ -448,7 +448,7 @@ export const CompanyAuth: React.FC<CompanyAuthProps> = ({ initialMode, isSignup 
 
               {mode === "signup" && (
                 <div>
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1.5">Confirm Password</label>
+                  <label htmlFor="company-confirm-password-input" className="block text-[10px] font-black uppercase tracking-widest text-slate-700 mb-1.5">Confirm Password</label>
                   <div className="relative">
                     <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input

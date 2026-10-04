@@ -18,6 +18,8 @@ import {
   Send,
   Eye,
   Filter,
+  Bot,
+  ArrowRight,
 } from "lucide-react";
 import { motion, AnimatePresence, useMotionValue, useTransform } from "motion/react";
 import { useApp } from "../../context/AppContext";
@@ -35,6 +37,7 @@ export const CareerRadarDashboard: React.FC = () => {
     swipes,
     setActiveView,
     triggerCelebration,
+    hasCandidateAppliedToJob,
   } = useApp();
 
   const [selectedJobForModal, setSelectedJobForModal] = useState<Job | null>(null);
@@ -130,11 +133,19 @@ export const CareerRadarDashboard: React.FC = () => {
   const onSwipeAction = (direction: "left" | "right") => {
     if (!currentJob) return;
 
+    if (direction === "right" && hasCandidateAppliedToJob(currentJob.id)) {
+      setFeedbackToast({
+        message: `⚠️ 1-Attempt Limit: You have already applied/completed interview for ${currentJob.title}.`,
+        type: "skip",
+      });
+      setTimeout(() => setFeedbackToast(null), 3500);
+      return;
+    }
+
     setSwipeDirection(direction);
     if (direction === "right") {
-      triggerCelebration();
       setFeedbackToast({
-        message: `Applied to ${currentJob.title} @ ${currentJob.companyName}! Tracking in My Applications.`,
+        message: `Opening Round 1 AI Interview for ${currentJob.title} @ ${currentJob.companyName}...`,
         type: "apply",
       });
     } else {
@@ -168,8 +179,49 @@ export const CareerRadarDashboard: React.FC = () => {
   // Top highlight job for the banner
   const topMatchJob = radarDeck[0] || null;
 
+  // Check for active AI Technical Interview invitations
+  const pendingAIInterview = applications.find(
+    (a) =>
+      (a.candidateId === candidate.id ||
+        (a.candidateEmail && candidate.email && a.candidateEmail.toLowerCase() === candidate.email.toLowerCase())) &&
+      a.aiInterviewStatus === "invited"
+  );
+
   return (
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-8 space-y-6 sm:space-y-8 overflow-x-hidden animate-in fade-in duration-200">
+      {/* ACTIVE AI TECHNICAL INTERVIEW BANNER */}
+      {pendingAIInterview && (
+        <div className="bg-gradient-to-r from-indigo-950 via-purple-950 to-slate-900 text-white p-5 sm:p-6 rounded-3xl border-2 border-indigo-500/50 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in slide-in-from-top-2">
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-400/40 flex items-center justify-center shrink-0">
+              <Bot className="w-6 h-6 text-indigo-400 animate-pulse" />
+            </div>
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-500 text-white">
+                  Technical Interview Ready
+                </span>
+                <span className="text-[11px] text-indigo-200 font-medium">Google Gemma 4 · 26B AI</span>
+              </div>
+              <h3 className="text-base sm:text-lg font-black text-white">
+                {pendingAIInterview.companyName} invited you to an AI Technical Interview!
+              </h3>
+              <p className="text-xs text-indigo-200">
+                Target Role: <strong className="text-white">{pendingAIInterview.jobTitle}</strong> · 3 targeted architecture & implementation questions.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setActiveView("candidate-applications")}
+            className="px-6 py-3.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white rounded-2xl font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-600/30 transition-all cursor-pointer hover:scale-105 active:scale-95 flex items-center justify-center gap-2 shrink-0"
+          >
+            <span>Start AI Interview Now</span>
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* 1. TOP WELCOME & SUMMARY HIGHLIGHTS */}
       <div className="bg-white border-2 border-slate-900/90 rounded-3xl p-5 sm:p-8 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-5 sm:gap-6">
@@ -794,7 +846,7 @@ export const CareerRadarDashboard: React.FC = () => {
                   onClick={() => setActiveView("candidate-applications")}
                   className="px-6 py-3 bg-sky-50 hover:bg-sky-100 text-sky-800 rounded-full text-xs font-black uppercase tracking-widest transition-colors cursor-pointer"
                 >
-                  View My Applications ({applications.length})
+                  View My Applications ({applications.filter((a) => !candidate.id || a.candidateId === candidate.id).length})
                 </button>
               </div>
             </div>
@@ -809,7 +861,7 @@ export const CareerRadarDashboard: React.FC = () => {
         onApply={(jobId) => handleSwipe(jobId, "right")}
         isApplied={
           selectedJobForModal
-            ? applications.some((a) => a.jobId === selectedJobForModal.id)
+            ? hasCandidateAppliedToJob(selectedJobForModal.id)
             : false
         }
       />

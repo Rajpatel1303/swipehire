@@ -1,4 +1,5 @@
 import { GeneratedJobResult } from "./types";
+import { supabase } from "../supabase/client";
 
 export class JobGenerator {
   /**
@@ -10,9 +11,16 @@ export class JobGenerator {
     companyLocation?: string
   ): Promise<GeneratedJobResult> {
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
       const response = await fetch("/api/ai/generate-job", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ prompt, companyName, companyLocation }),
       });
 
@@ -25,8 +33,8 @@ export class JobGenerator {
             department: j.department || "Engineering",
             location: j.location || companyLocation || "Ahmedabad, India",
             workMode: (j.workMode === "Remote" || j.workMode === "Onsite" ? j.workMode : "Hybrid") as any,
-            experience: j.experience || "2–4 Years",
-            salary: j.salary || "?7–10 LPA",
+            experience: j.experience || "2-4 Years",
+            salary: j.salary || "?7-10 LPA",
             openings: Number(j.openings) || 1,
             description: j.description || `Exciting opportunity at ${companyName || "our high-growth tech team"}.`,
             responsibilities: Array.isArray(j.responsibilities) ? j.responsibilities : [
@@ -64,13 +72,13 @@ export class JobGenerator {
     if (lower.includes("frontend") || lower.includes("ui")) title = "Frontend Developer";
     if (lower.includes("mobile") || lower.includes("native")) title = "Mobile App Engineer";
 
-    let exp = "2–4 Years";
-    if (lower.includes("senior") || lower.includes("5") || lower.includes("6")) exp = "4–7 Years";
-    if (lower.includes("junior") || lower.includes("1") || lower.includes("fresher")) exp = "1–2 Years";
+    let exp = "2-4 Years";
+    if (lower.includes("senior") || lower.includes("5") || lower.includes("6")) exp = "4-7 Years";
+    if (lower.includes("junior") || lower.includes("1") || lower.includes("fresher")) exp = "1-2 Years";
 
-    let salary = "?7–10 LPA";
+    let salary = "?7-10 LPA";
     if (lower.includes("lpa")) {
-      const match = prompt.match(/(\d+(?:\.\d+)?\s*(?:-|–|to)\s*\d+(?:\.\d+)?\s*lpa)/i);
+      const match = prompt.match(/(\d+(?:\.\d+)?\s*(?:-|-|to)\s*\d+(?:\.\d+)?\s*lpa)/i);
       if (match) salary = match[1].toUpperCase();
     }
 

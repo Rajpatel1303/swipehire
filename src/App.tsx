@@ -38,6 +38,11 @@ import { CompanyAddJobModal } from "./components/company/CompanyAddJobModal";
 // Reverse Hiring Marketplace (Blind Talent Bidding)
 import { ReverseMarketplacePage } from "./components/marketplace/ReverseMarketplacePage";
 
+// AI Interview Round Modals & Room
+import { CandidateInterviewGateModal } from "./components/candidate/CandidateInterviewGateModal";
+import { InterviewCompletedModal } from "./components/candidate/InterviewCompletedModal";
+import { AIInterviewChatRoom } from "./components/interview/AIInterviewChatRoom";
+
 const MainContent: React.FC = () => {
   const {
     authUser,
@@ -51,6 +56,16 @@ const MainContent: React.FC = () => {
     setIsAddJobModalOpen,
     supportSession,
     exitSupportMode,
+    interviewGateJob,
+    closeInterviewGate,
+    isInitializingInterview,
+    startAIInterviewForJob,
+    activeInterviewSessionData,
+    closeActiveInterviewSession,
+    submitApplicationWithCompletedInterview,
+    interviewCompletionState,
+    closeInterviewCompletionModal,
+    setActiveView,
   } = useApp();
 
   // 1. Loading Screen Gate: Never flash dashboard or wrong role while session is hydrating
@@ -189,6 +204,7 @@ const MainContent: React.FC = () => {
       case "company-email-connect":
         return <CompanyEmailConnectPage />;
       case "company-interviews":
+      case "ai-interview-demo":
         return <CompanyInterviewsPage />;
       case "company-compare":
         return <CompanyComparisonPage />;
@@ -215,6 +231,53 @@ const MainContent: React.FC = () => {
         isOpen={isAddJobModalOpen}
         onClose={() => setIsAddJobModalOpen(false)}
       />
+
+      {/* Mandatory AI Technical Interview Round Gate Modal */}
+      <CandidateInterviewGateModal
+        isOpen={!!interviewGateJob}
+        job={interviewGateJob}
+        candidate={candidate}
+        isLoading={isInitializingInterview}
+        onClose={closeInterviewGate}
+        onStartInterview={(job) => startAIInterviewForJob(job)}
+      />
+
+      {/* Live Interactive AI Technical Interview Studio */}
+      {activeInterviewSessionData && (
+        <AIInterviewChatRoom
+          session={activeInterviewSessionData.session}
+          initialQuestions={activeInterviewSessionData.questions}
+          job={activeInterviewSessionData.job}
+          candidate={activeInterviewSessionData.candidate}
+          onClose={closeActiveInterviewSession}
+          onFinishInterview={async (evaluation, qaHistory) => {
+            await submitApplicationWithCompletedInterview(
+              activeInterviewSessionData.job,
+              activeInterviewSessionData.session.id,
+              evaluation,
+              qaHistory
+            );
+          }}
+        />
+      )}
+
+      {/* Candidate Round 1 Interview & Application Completed Modal */}
+      {interviewCompletionState && (
+        <InterviewCompletedModal
+          isOpen={interviewCompletionState.show}
+          jobTitle={interviewCompletionState.jobTitle}
+          companyName={interviewCompletionState.companyName}
+          score={interviewCompletionState.score}
+          verdict={interviewCompletionState.verdict}
+          integrityScore={interviewCompletionState.integrityScore}
+          proctoringSummary={interviewCompletionState.proctoringSummary}
+          onClose={closeInterviewCompletionModal}
+          onViewApplications={() => {
+            closeInterviewCompletionModal();
+            setActiveView("candidate-applications");
+          }}
+        />
+      )}
     </div>
   );
 };

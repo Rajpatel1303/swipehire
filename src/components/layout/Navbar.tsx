@@ -66,18 +66,37 @@ export const Navbar: React.FC = () => {
 
   const navItems = () => {
     if (role === "candidate") {
+      const candApps = applications.filter(
+        (a) => !candidate.id || a.candidateId === candidate.id
+      );
       return [
         { id: "candidate-radar", label: "Career Radar", icon: Compass, badge: "AI" },
         { id: "blind-marketplace", label: "Blind Marketplace", icon: Sparkles, badge: "72h Bid" },
         { id: "candidate-jobs", label: "Browse Jobs", icon: Briefcase },
-        { id: "candidate-applications", label: "My Applications", icon: Layers },
+        {
+          id: "candidate-applications",
+          label: "My Applications",
+          icon: Layers,
+          badge: candApps.length > 0 ? `${candApps.length}` : undefined,
+        },
         { id: "candidate-profile", label: "My Profile", icon: User },
       ];
     }
     if (role === "company") {
+      const companyApps = applications.filter(
+        (a) =>
+          (!company.id || a.companyId === company.id) &&
+          !a.hiddenFromCompany &&
+          !a.deletedByCompany
+      );
       return [
         { id: "company-cockpit", label: "Hiring Radar", icon: Compass, badge: "Live" },
-        { id: "company-applications", label: "Applications", icon: UserCheck, badge: `${applications.length}` },
+        {
+          id: "company-applications",
+          label: "Applications",
+          icon: UserCheck,
+          badge: companyApps.length > 0 ? `${companyApps.length}` : undefined,
+        },
         { id: "blind-marketplace", label: "Blind Marketplace", icon: Sparkles, badge: "Upfront CTC" },
         { id: "company-jobs", label: "Manage Jobs", icon: Briefcase },
         { id: "company-pipeline", label: "Pipeline", icon: Layers },

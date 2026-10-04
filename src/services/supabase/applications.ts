@@ -73,6 +73,13 @@ export class ApplicationsService {
           deletedByCompany: !!app.deleted_by_company,
           rejectedAt: app.rejected_at || undefined,
           rejectionReason: app.rejection_reason || undefined,
+          aiInterviewSessionId: app.ai_interview_session_id || undefined,
+          aiInterviewStatus: app.ai_interview_status || undefined,
+          aiInterviewScore: app.ai_interview_score !== null && app.ai_interview_score !== undefined ? Number(app.ai_interview_score) : undefined,
+          aiInterviewVerdict: app.ai_interview_verdict || undefined,
+          aiInterviewCompletedAt: app.ai_interview_completed_at || undefined,
+          aiInterviewEvaluation: app.ai_interview_evaluation || undefined,
+          aiInterviewQAs: app.ai_interview_evaluation?.qaHistory || undefined,
         };
       });
     } catch (err) {
@@ -121,9 +128,15 @@ export class ApplicationsService {
         deleted_by_company: app.deletedByCompany,
         rejected_at: app.rejectedAt,
         rejection_reason: app.rejectionReason,
+        ai_interview_session_id: app.aiInterviewSessionId || null,
+        ai_interview_status: app.aiInterviewStatus || null,
+        ai_interview_score: app.aiInterviewScore ?? null,
+        ai_interview_verdict: app.aiInterviewVerdict || null,
+        ai_interview_completed_at: app.aiInterviewCompletedAt || null,
+        ai_interview_evaluation: app.aiInterviewEvaluation ? (app.aiInterviewEvaluation as any) : null,
         applied_at: app.appliedAt || new Date().toISOString(),
         last_updated_at: new Date().toISOString(),
-      });
+      } as any);
 
       if (error) {
         console.warn("[ApplicationsService] Failed to save application:", error.message);
@@ -271,4 +284,39 @@ export class ApplicationsService {
       return false;
     }
   }
+
+  /**
+   * Delete an application by ID from Supabase and log audit event
+   */
+  static async deleteApplication(id: string): Promise<boolean> {
+    try {
+      const { data: existing } = await supabase
+        .from("applications")
+        .select("job_id, candidate_id, company_id, status")
+        .eq("id", id)
+        .maybeSingle();
+
+      const { error } = await supabase.from("applications").delete().eq("id", id);
+      if (error) {
+        console.warn("[ApplicationsService] Failed to delete application:", error.message);
+        return false;
+      }
+
+      await AuditService.log({
+        actorRole: "company",
+        companyId: existing?.company_id,
+        action: "application_deleted",
+        entityType: "application",
+        entityId: id,
+        oldData: existing || undefined,
+        metadata: { id },
+      });
+
+      return true;
+    } catch (err) {
+      console.warn("[ApplicationsService] Error deleting application:", err);
+      return false;
+    }
+  }
 }
+

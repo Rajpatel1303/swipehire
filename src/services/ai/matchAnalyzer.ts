@@ -1,5 +1,6 @@
 import { CandidateProfile, Job } from "../../types";
 import { MatchAnalysisResult } from "./types";
+import { supabase } from "../supabase/client";
 
 export class MatchAnalyzer {
   /**
@@ -11,9 +12,16 @@ export class MatchAnalyzer {
     customFocus?: string
   ): Promise<MatchAnalysisResult> {
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
       const response = await fetch("/api/ai/match-analysis", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ candidate, job, customFocus }),
       });
 
@@ -58,10 +66,10 @@ export class MatchAnalyzer {
     const finalScore = Math.min(Math.max(baseScore, 58), 98);
 
     let fitVerdict = "Strong Fit";
-    if (finalScore >= 90) fitVerdict = "Exceptional Fit · Strong Hire Recommendation";
-    else if (finalScore >= 80) fitVerdict = "Good Fit · Recommended with Quick Ramp-Up";
-    else if (finalScore >= 70) fitVerdict = "Moderate Fit · Review Nuances";
-    else fitVerdict = "Skill Gap · Requires Further Screening";
+    if (finalScore >= 90) fitVerdict = "Exceptional Fit Â· Strong Hire Recommendation";
+    else if (finalScore >= 80) fitVerdict = "Good Fit Â· Recommended with Quick Ramp-Up";
+    else if (finalScore >= 70) fitVerdict = "Moderate Fit Â· Review Nuances";
+    else fitVerdict = "Skill Gap Â· Requires Further Screening";
 
     const reasons: string[] = [];
     matchedSkills.slice(0, 3).forEach(s => {

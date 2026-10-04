@@ -8,18 +8,18 @@ export class CompaniesService {
    */
   static async getCompanies(): Promise<CompanyProfile[]> {
     try {
-      const { data, error } = await supabase.from("companies").select("*");
+      const { data, error } = await (supabase.from("public_companies" as any) as any).select("*");
       if (error || !data) {
-        console.warn("[CompaniesService] Failed to fetch companies:", error?.message);
+        console.warn("[CompaniesService] Failed to fetch companies from public view:", error?.message);
         return [];
       }
 
-      return data.map((c) => ({
+      return data.map((c: any) => ({
         id: c.id,
-        userId: c.user_id,
+        userId: c.user_id || "",
         companyName: c.company_name,
-        contactPerson: c.contact_person,
-        email: c.email,
+        contactPerson: c.contact_person || "",
+        email: c.email || "",
         phone: c.phone || "",
         logo: c.logo || "",
         website: c.website || "",

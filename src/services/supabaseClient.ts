@@ -1,1 +1,1 @@
-export { supabase } from "./supabase/client";
+export { supabase, getAuthHeaders } from "./supabase/client";

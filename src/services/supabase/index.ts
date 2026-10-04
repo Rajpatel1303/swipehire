@@ -10,6 +10,7 @@ export * from "./sla";
 export * from "./templates";
 export * from "./admin";
 export * from "./audit";
+export * from "./interviews";
 
 import { AuthService } from "./auth";
 import { CandidatesService } from "./candidates";
@@ -58,6 +59,7 @@ export const SupabaseService = {
   // Applications
   getApplications: ApplicationsService.getApplications.bind(ApplicationsService),
   saveApplication: ApplicationsService.saveApplication.bind(ApplicationsService),
+  deleteApplication: ApplicationsService.deleteApplication.bind(ApplicationsService),
   logSwipe: ApplicationsService.logSwipe.bind(ApplicationsService),
 
   // Marketplace

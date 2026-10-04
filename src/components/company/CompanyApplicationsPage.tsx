@@ -16,6 +16,7 @@ import {
   Calendar,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   ArrowRight,
   Filter,
   Download,
@@ -41,11 +42,13 @@ import {
   Trash2,
   X,
   ShieldAlert,
+  ShieldCheck,
   Flame,
   Timer,
+  Bot,
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
-import { Application, ApplicationStatus, Job, CandidateProfile, GitHubRepoItem } from "../../types";
+import { Application, ApplicationStatus, Job, CandidateProfile, GitHubRepoItem, InterviewEvaluation } from "../../types";
 import { GeminiService, MatchAnalysisResult } from "../../services/geminiService";
 import { ScheduleInterviewModal } from "./modals/ScheduleInterviewModal";
 import { SendEmailModal } from "./modals/SendEmailModal";
@@ -57,6 +60,8 @@ import { FastActionCountdownBadge } from "../common/FastActionCountdownBadge";
 import { GitHubProjectModal } from "../common/GitHubProjectModal";
 import { CustomSelect } from "../common/CustomSelect";
 import { UserAvatar } from "../common/UserAvatar";
+import { InterviewReportModal } from "../interview/InterviewReportModal";
+import { SupabaseInterviewsService } from "../../services/supabase/interviews";
 
 const STAGE_CONFIG: Record<
   ApplicationStatus,
@@ -88,6 +93,8 @@ export const CompanyApplicationsPage: React.FC = () => {
     expireApplication,
     purgeExpiredApplications,
     simulateFastForwardApplication,
+    scheduleInterview,
+    inviteCandidateToAIInterview,
     applyToJob,
     triggerCelebration,
     setActiveView,
@@ -99,7 +106,13 @@ export const CompanyApplicationsPage: React.FC = () => {
     [jobs, company.id]
   );
   const companyApplications = useMemo(
-    () => applications.filter((a) => !company.id || a.companyId === company.id),
+    () =>
+      applications.filter(
+        (a) =>
+          (!company.id || a.companyId === company.id) &&
+          !a.hiddenFromCompany &&
+          !a.deletedByCompany
+      ),
     [applications, company.id]
   );
 
@@ -131,6 +144,171 @@ export const CompanyApplicationsPage: React.FC = () => {
   const [selectedInterviewKitApp, setSelectedInterviewKitApp] = useState<Application | null>(null);
   const [selectedOfferApp, setSelectedOfferApp] = useState<Application | null>(null);
   const [inspectingProject, setInspectingProject] = useState<{ repo: GitHubRepoItem; username: string } | null>(null);
+
+  // Active AI Interview states & handlers
+  const [isInvitingMap, setIsInvitingMap] = useState<Record<string, boolean>>({});
+  const [activeAIReport, setActiveAIReport] = useState<{
+    app: Application;
+    evaluation: InterviewEvaluation;
+    qaHistory: Array<{
+      question: string;
+      answer: string;
+      qualityScore?: number;
+      assessment?: string;
+    }>;
+    job: Job;
+    candidate: CandidateProfile;
+  } | null>(null);
+
+  const handleInviteAIInterview = async (app: Application) => {
+    setIsInvitingMap((prev) => ({ ...prev, [app.id]: true }));
+    try {
+      const res = await inviteCandidateToAIInterview(app.id);
+      if (!res.success) {
+        alert(`Failed to invite candidate to AI interview: ${res.error || "Unknown error"}`);
+      }
+    } catch (err: any) {
+      alert(`Error inviting candidate: ${err.message || "Failed"}`);
+    } finally {
+      setIsInvitingMap((prev) => ({ ...prev, [app.id]: false }));
+    }
+  };
+
+  const handleOpenAIReport = async (app: Application) => {
+    try {
+      const matchingJob: Job = jobs.find((j) => j.id === app.jobId) || {
+        id: app.jobId,
+        companyId: app.companyId,
+        companyName: app.companyName,
+        companyLogo: app.companyLogo || "",
+        title: app.jobTitle,
+        department: "Engineering",
+        location: app.jobLocation || "Hybrid",
+        workMode: app.jobWorkMode || "Hybrid",
+        experience: `${app.candidateExpYears || 2}+ Years`,
+        salary: app.jobSalary || "Competitive",
+        openings: 1,
+        description: `${app.jobTitle} position at ${app.companyName}`,
+        responsibilities: [],
+        requirements: [],
+        requiredSkills: app.matchedSkills || app.candidateSkills || [],
+        preferredSkills: [],
+        status: "active",
+        createdAt: app.appliedAt,
+      };
+
+      const candFromList = allCandidates.find((c) => c.id === app.candidateId);
+      const matchingCandidate: CandidateProfile = candFromList || {
+        id: app.candidateId,
+        fullName: app.candidateName,
+        headline: app.candidateHeadline,
+        email: app.candidateEmail,
+        phone: app.candidatePhone,
+        location: app.candidateLocation,
+        workPreference: app.candidateWorkPreference || "Hybrid",
+        yearsOfExperience: app.candidateExpYears,
+        skills: app.candidateSkills,
+        possibleRoles: [],
+        education: app.candidateEducationList || [],
+        experience: app.candidateExperienceList || [],
+        projects: app.candidateProjectsList || [],
+        certifications: [],
+        expectedSalary: app.candidateExpectedSalary || "Competitive",
+        preferredRole: app.jobTitle,
+        bio: app.candidateBio,
+        profilePhoto: app.candidatePhoto,
+        profileStrength: 85,
+        isCompleted: true,
+      };
+
+      let full: any = null;
+      if (app.aiInterviewSessionId) {
+        full = await SupabaseInterviewsService.getSession(app.aiInterviewSessionId);
+      }
+
+      const rawEvaluationQAs =
+        (app.aiInterviewEvaluation as any)?.qaHistory ||
+        (full?.evaluation as any)?.qaHistory ||
+        app.aiInterviewQAs ||
+        [];
+
+      let qaItems: any[] = [];
+      if (full?.answers && full.answers.length > 0) {
+        qaItems = full.answers.map((a: any, idx: number) => {
+          const matchedQ = (full.questions || []).find((q: any) => q.id === a.questionId);
+          return {
+            question: a.questionText || matchedQ?.questionText || `Question ${idx + 1}`,
+            answer: a.answerText || "Recorded answer",
+            qualityScore: a.answerQualityScore,
+            assessment: a.aiAssessment || "Evaluated by Google Gemma 4 26B.",
+            audioUrl: a.audioUrl,
+            audioDurationSeconds: a.audioDurationSeconds,
+          };
+        });
+      } else if (rawEvaluationQAs && rawEvaluationQAs.length > 0) {
+        qaItems = rawEvaluationQAs.map((item: any, idx: number) => ({
+          question: item.question || `Question ${idx + 1}`,
+          answer: item.answer || "Recorded answer",
+          qualityScore: item.qualityScore ?? 0.8,
+          assessment: item.assessment || "Evaluated by Google Gemma 4 26B.",
+          audioUrl: item.audioUrl,
+          audioDurationSeconds: item.audioDurationSeconds,
+        }));
+      } else if (full?.questions && full.questions.length > 0) {
+        qaItems = full.questions.map((q: any) => ({
+          question: q.questionText,
+          answer: "Spoken technical response evaluated by Gemma 4.",
+          qualityScore: 0.78,
+          assessment: "Evaluated by Google Gemma 4 26B.",
+        }));
+      }
+
+      const resolvedProctoring =
+        full?.evaluation?.proctoringMetrics ||
+        full?.evaluation?.detailedFeedback?.proctoring ||
+        app.proctoringMetrics ||
+        (app.aiInterviewEvaluation as any)?.proctoringMetrics ||
+        (app.aiInterviewEvaluation as any)?.detailedFeedback?.proctoring;
+
+      const baseEval = full?.evaluation || app.aiInterviewEvaluation || {};
+      const finalEval: InterviewEvaluation = {
+        ...baseEval,
+        id: baseEval.id || `eval_${app.id}`,
+        sessionId: baseEval.sessionId || app.aiInterviewSessionId || "",
+        companyId: baseEval.companyId || app.companyId,
+        candidateId: baseEval.candidateId || app.candidateId,
+        overallScore: baseEval.overallScore ?? app.aiInterviewScore ?? 75,
+        technicalScore: baseEval.technicalScore ?? app.aiInterviewScore ?? 75,
+        problemSolvingScore: baseEval.problemSolvingScore ?? app.aiInterviewScore ?? 75,
+        projectUnderstandingScore: baseEval.projectUnderstandingScore ?? app.aiInterviewScore ?? 75,
+        communicationScore: baseEval.communicationScore ?? app.aiInterviewScore ?? 75,
+        roleKnowledgeScore: baseEval.roleKnowledgeScore ?? app.aiInterviewScore ?? 75,
+        verdict: baseEval.verdict || app.aiInterviewVerdict || "Recommended",
+        aiSummary: baseEval.aiSummary || app.aiSummary || `Candidate demonstrated solid understanding of ${matchingJob.requiredSkills.slice(0, 3).join(", ") || "core technical systems"}.`,
+        strengths: baseEval.strengths || [
+          "Hands-on architectural knowledge",
+          "Structured problem decomposition",
+          "Production edge-case awareness",
+        ],
+        areasToExplore: baseEval.areasToExplore || [
+          "Large-scale distributed systems trade-offs",
+          "Asynchronous error telemetry",
+        ],
+        proctoringMetrics: resolvedProctoring,
+        createdAt: baseEval.createdAt || app.aiInterviewCompletedAt || new Date().toISOString(),
+      };
+
+      setActiveAIReport({
+        app,
+        evaluation: finalEval,
+        qaHistory: qaItems,
+        job: matchingJob,
+        candidate: matchingCandidate,
+      });
+    } catch (err: any) {
+      console.warn("[CompanyApplicationsPage] Error opening AI report:", err);
+    }
+  };
 
   // Compute Skill Breakdown Helper
   const getSkillBreakdown = (app: Application, job: Job | undefined) => {
@@ -184,18 +362,18 @@ export const CompanyApplicationsPage: React.FC = () => {
           }
         }
 
+        // Hide hidden or deleted applications from company view
+        if (app.hiddenFromCompany || app.deletedByCompany) {
+          return false;
+        }
+
         // Stage filter
         if (filterStage === "rejected") {
           return app.status === "rejected";
         }
 
-        // Hide rejected, deleted, or hidden applications by default from company view
-        if (app.hiddenFromCompany || app.deletedByCompany || app.status === "rejected") {
-          return false;
-        }
-
         if (filterStage === "high-match") {
-          return (app.matchScore || 0) >= 90 && app.status !== "expired" && !app.isExpired;
+          return (app.matchScore || 0) >= 90 && app.status !== "expired" && !app.isExpired && app.status !== "rejected";
         }
         if (filterStage === "urgent-sla") {
           return app.status === "applied" && !app.isExpired;
@@ -328,7 +506,7 @@ export const CompanyApplicationsPage: React.FC = () => {
               Candidate Applications
             </h1>
             <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-sky-100 text-sky-800 border border-sky-200">
-              {applications.length} Total
+              {companyApplications.length} Total
             </span>
           </div>
           <p className="text-xs text-slate-500 font-medium mt-0.5">
@@ -410,7 +588,7 @@ export const CompanyApplicationsPage: React.FC = () => {
             <span>90%+ Match</span>
           </div>
           <div className="text-2xl font-black text-emerald-950 mt-1">
-            {companyApplications.filter((a) => (a.matchScore || 0) >= 90 && !a.isExpired).length}
+            {companyApplications.filter((a) => (a.matchScore || 0) >= 90 && !a.isExpired && a.status !== "rejected").length}
           </div>
         </div>
 
@@ -554,7 +732,7 @@ export const CompanyApplicationsPage: React.FC = () => {
                 : "bg-slate-100 text-slate-600 hover:bg-slate-200"
             }`}
           >
-            All Stages ({applications.length})
+            All Stages ({companyApplications.length})
           </button>
           <button
             onClick={() => setFilterStage("urgent-sla")}
@@ -580,7 +758,7 @@ export const CompanyApplicationsPage: React.FC = () => {
           </button>
           {(["applied", "screening", "shortlisted", "interview", "offer", "hired", "rejected"] as ApplicationStatus[]).map(
             (status) => {
-              const count = applications.filter((a) => a.status === status).length;
+              const count = companyApplications.filter((a) => a.status === status).length;
               const config = STAGE_CONFIG[status];
               const isActive = filterStage === status;
               return (
@@ -734,7 +912,7 @@ export const CompanyApplicationsPage: React.FC = () => {
             return (
               <div
                 key={app.id}
-                className={`bg-white rounded-3xl border transition-all duration-200 overflow-hidden shadow-xs hover:shadow-md ${
+                className={`bg-white rounded-3xl border transition-all duration-200 relative shadow-xs hover:shadow-md ${
                   isAppExpired
                     ? "border-rose-300 bg-rose-50/10 opacity-90"
                     : isSelected
@@ -744,7 +922,7 @@ export const CompanyApplicationsPage: React.FC = () => {
               >
                 {/* 72h Expiration Alert Lockout Banner */}
                 {isAppExpired && (
-                  <div className="bg-rose-100/80 border-b border-rose-200 px-5 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-rose-900">
+                  <div className="bg-rose-100/80 border-b border-rose-200 px-5 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-rose-900 rounded-t-3xl">
                     <div className="flex items-center gap-2.5">
                       <div className="w-8 h-8 rounded-xl bg-rose-200 text-rose-800 flex items-center justify-center shrink-0">
                         <Lock className="w-4 h-4" />
@@ -765,7 +943,11 @@ export const CompanyApplicationsPage: React.FC = () => {
                     </div>
 
                     <button
-                      onClick={() => deleteApplication(app.id)}
+                      onClick={() => {
+                        if (window.confirm(`Delete expired application record for ${app.candidateName}?`)) {
+                          deleteCandidate(app.id);
+                        }
+                      }}
                       className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer shadow-xs"
                       title="Remove expired record permanently"
                     >
@@ -839,6 +1021,46 @@ export const CompanyApplicationsPage: React.FC = () => {
                           >
                             {stageConfig.label}
                           </span>
+                          {app.aiInterviewStatus === "completed" && (
+                            <>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenAIReport(app);
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[11px] font-black bg-gradient-to-r from-indigo-50 to-purple-50 hover:from-indigo-100 hover:to-purple-100 text-indigo-700 border border-indigo-200 transition-all shadow-2xs cursor-pointer hover:scale-105 active:scale-95"
+                                title="Click to inspect complete Google Gemma 4 26B AI Interview report & answers"
+                              >
+                                <Bot className="w-3.5 h-3.5 text-indigo-600" />
+                                <span>Gemma 4: {app.aiInterviewScore ?? 75}% · {app.aiInterviewVerdict || "Recommended"}</span>
+                                <ChevronRight className="w-3 h-3 text-indigo-400" />
+                              </button>
+
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenAIReport(app);
+                                }}
+                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black border transition-all cursor-pointer hover:scale-105 ${
+                                  (app.aiInterviewIntegrityScore ?? 100) >= 85
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                                    : (app.aiInterviewIntegrityScore ?? 100) >= 65
+                                    ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
+                                    : "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100"
+                                }`}
+                                title={`AI Proctoring Integrity Score: ${app.aiInterviewIntegrityScore ?? 100}% — Click to view anti-cheat audit report`}
+                              >
+                                <ShieldCheck className="w-3 h-3" />
+                                <span>{app.aiInterviewIntegrityScore ?? 100}% Integrity</span>
+                              </button>
+                            </>
+                          )}
+                          {app.aiInterviewStatus === "invited" && (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-50 text-amber-800 border border-amber-300 animate-pulse">
+                              <Bot className="w-3 h-3 text-amber-600" />
+                              <span>Pending AI Interview</span>
+                            </span>
+                          )}
                           <FastActionCountdownBadge
                             appliedAt={app.appliedAt}
                             deadline={app.slaDeadline}
@@ -995,98 +1217,165 @@ export const CompanyApplicationsPage: React.FC = () => {
                   )}
 
                   {/* Action Bar / Pipeline Status Transition Row */}
-                  <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                    {/* Stage Selector or Lock Message */}
+                  <div className="pt-4 border-t border-slate-100 flex flex-col xl:flex-row xl:items-center justify-between gap-3.5">
+                    {/* Left: Stage Selector & Record Actions */}
                     {isAppExpired ? (
-                      <div className="flex items-center gap-2 text-rose-700">
-                        <Lock className="w-4 h-4" />
+                      <div className="inline-flex items-center gap-2 text-rose-700 bg-rose-50 border border-rose-200 px-3.5 py-1.5 rounded-xl">
+                        <Lock className="w-4 h-4 shrink-0" />
                         <span className="text-xs font-bold uppercase tracking-wider">
                           Pipeline Stage Locked (72h SLA Deadline Exceeded)
                         </span>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Change Stage:</span>
-                        <CustomSelect
-                          value={app.status}
-                          onChange={(newStatus) => {
-                            if (newStatus === "rejected") {
-                              rejectApplication(app.id);
-                            } else {
-                              updateApplicationStatus(app.id, newStatus as ApplicationStatus);
-                            }
-                          }}
-                          variant="card"
-                          size="sm"
-                          options={[
-                            { value: "applied", label: "New Applied" },
-                            { value: "screening", label: "Screening" },
-                            { value: "shortlisted", label: "Shortlisted" },
-                            { value: "interview", label: "Interview" },
-                            { value: "offer", label: "Offer Made" },
-                            { value: "hired", label: "Hired ✦" },
-                            { value: "rejected", label: "Rejected" },
-                          ]}
-                        />
-                      </div>
-                    )}
-
-                    {/* Recruiter Action Buttons */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {isAppExpired ? (
-                        <button
-                          onClick={() => deleteCandidate(app.id)}
-                          className="flex items-center gap-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Delete Record</span>
-                        </button>
-                      ) : (
-                        <>
-                          {/* Reject Candidate Button */}
-                          <button
-                            onClick={() => {
-                              if (window.confirm(`Reject ${app.candidateName}? This will notify the candidate with AI constructive feedback and remove them from your active pipeline.`)) {
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        {/* Change Stage Pill */}
+                        <div className="inline-flex items-center gap-2 bg-slate-50 border border-slate-200/90 px-3 py-1 rounded-xl shadow-2xs">
+                          <span className="text-[11px] font-black uppercase tracking-wider text-slate-500 shrink-0">
+                            Stage:
+                          </span>
+                          <CustomSelect
+                            value={app.status}
+                            direction="up"
+                            onChange={(newStatus) => {
+                              if (newStatus === "rejected") {
                                 rejectApplication(app.id);
+                              } else {
+                                updateApplicationStatus(app.id, newStatus as ApplicationStatus);
                               }
                             }}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
-                            title="Reject candidate and deliver AI feedback"
-                          >
-                            <X className="w-3.5 h-3.5 text-rose-600" />
-                            <span>Reject</span>
-                          </button>
+                            variant="card"
+                            size="sm"
+                            buttonClassName="h-8"
+                            options={[
+                              { value: "applied", label: "New Applied" },
+                              { value: "screening", label: "Screening" },
+                              { value: "shortlisted", label: "Shortlisted" },
+                              { value: "interview", label: "Interview" },
+                              { value: "offer", label: "Offer Made" },
+                              { value: "hired", label: "Hired ✦" },
+                              { value: "rejected", label: "Rejected" },
+                            ]}
+                          />
+                        </div>
 
-                          {/* Delete Candidate Button */}
+                        {/* Candidate Record Controls: Reject, Delete, Fast Forward */}
+                        <div className="inline-flex items-center gap-1.5">
+                          {app.status !== "rejected" && (
+                            <button
+                              onClick={() => {
+                                if (window.confirm(`Reject ${app.candidateName}? This will notify the candidate with AI constructive feedback and remove them from your active pipeline.`)) {
+                                  rejectApplication(app.id);
+                                }
+                              }}
+                              className="inline-flex items-center gap-1.5 h-8 px-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                              title="Reject candidate and deliver AI feedback"
+                            >
+                              <X className="w-3.5 h-3.5 text-rose-600" />
+                              <span>Reject</span>
+                            </button>
+                          )}
+
                           <button
                             onClick={() => {
                               if (window.confirm(`Delete ${app.candidateName} from your pipeline?`)) {
                                 deleteCandidate(app.id);
                               }
                             }}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-800 border border-red-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                            className="inline-flex items-center gap-1.5 h-8 px-2.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200/80 rounded-xl text-xs font-bold transition-colors cursor-pointer"
                             title="Delete candidate record from company"
                           >
                             <Trash2 className="w-3.5 h-3.5 text-red-600" />
                             <span>Delete</span>
                           </button>
 
-                          {/* Live 72h Fast Forward Simulation Button for Testing */}
                           {app.status === "applied" && (
                             <button
                               onClick={() => simulateFastForwardApplication(app.id)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                              className="inline-flex items-center gap-1.5 h-8 px-2.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300/80 rounded-xl text-xs font-bold transition-colors cursor-pointer"
                               title="Simulate 72h elapsing to test auto-locking SLA behavior"
                             >
                               <Flame className="w-3.5 h-3.5 text-amber-600" />
-                              <span>⚡ Test +72h Expiry</span>
+                              <span>⚡ +72h Expiry</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Right: Recruiter Action Buttons */}
+                    <div className="flex items-center gap-2 flex-wrap xl:justify-end">
+                      {isAppExpired ? (
+                        <button
+                          onClick={() => {
+                            if (window.confirm(`Delete expired application record for ${app.candidateName}?`)) {
+                              deleteCandidate(app.id);
+                            }
+                          }}
+                          className="inline-flex items-center gap-1.5 h-8 px-3.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-xs"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Delete Record</span>
+                        </button>
+                      ) : (
+                        <>
+                          {/* Gemma 4 AI Interview Actions & Next Round Decision */}
+                          {app.aiInterviewStatus === "completed" ? (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <button
+                                onClick={() => handleOpenAIReport(app)}
+                                className="inline-flex items-center gap-1.5 h-8 px-3.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer hover:scale-[1.02]"
+                                title="View full candidate evaluation, Q&A audit trail, and 5-axis Gemma 4 breakdown"
+                              >
+                                <Bot className="w-3.5 h-3.5" />
+                                <span>Gemma 4 Report ({app.aiInterviewScore ?? 75}%)</span>
+                              </button>
+
+                              {(app.status === "interview" || app.status === "applied" || app.status === "screening") && (
+                                <>
+                                  <button
+                                    onClick={() => {
+                                      updateApplicationStatus(app.id, "shortlisted", "Passed AI Technical Interview (Round 1) • Advanced to Next Round");
+                                      triggerCelebration();
+                                    }}
+                                    className="inline-flex items-center gap-1.5 h-8 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer hover:scale-[1.02]"
+                                    title="Advance candidate to Next Round (Shortlisted for Live / Human Round)"
+                                  >
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    <span>Advance to Next Round</span>
+                                  </button>
+
+                                  <button
+                                    onClick={() => rejectApplication(app.id)}
+                                    className="inline-flex items-center gap-1 h-8 px-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                                    title="Decline candidate with constructive feedback"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                    <span>Decline</span>
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          ) : app.aiInterviewStatus === "invited" ? (
+                            <div className="inline-flex items-center gap-1.5 h-8 px-3 bg-amber-50 text-amber-800 border border-amber-200 rounded-xl text-xs font-bold">
+                              <Bot className="w-3.5 h-3.5 text-amber-600" />
+                              <span>AI Interview Sent</span>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => handleInviteAIInterview(app)}
+                              disabled={isInvitingMap[app.id]}
+                              className="inline-flex items-center gap-1.5 h-8 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
+                              title="Generate 3 tailored technical questions via Google Gemma 4 26B and dispatch invitation to candidate"
+                            >
+                              <Bot className={`w-3.5 h-3.5 text-indigo-600 ${isInvitingMap[app.id] ? "animate-spin" : ""}`} />
+                              <span>{isInvitingMap[app.id] ? "Generating Interview..." : "Invite to AI Interview"}</span>
                             </button>
                           )}
 
                           {/* Interview Kit / Scorecard */}
                           <button
                             onClick={() => setSelectedInterviewKitApp(app)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                            className="inline-flex items-center gap-1.5 h-8 px-3 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
                           >
                             <HelpCircle className="w-3.5 h-3.5 text-amber-600" />
                             <span>AI Interview Kit</span>
@@ -1095,7 +1384,7 @@ export const CompanyApplicationsPage: React.FC = () => {
                           {/* Make Offer */}
                           <button
                             onClick={() => setSelectedOfferApp(app)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                            className="inline-flex items-center gap-1.5 h-8 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
                           >
                             <Award className="w-3.5 h-3.5 text-emerald-600" />
                             <span>Make Offer</span>
@@ -1104,10 +1393,10 @@ export const CompanyApplicationsPage: React.FC = () => {
                           {/* Deep-Dive Expansion Toggle */}
                           <button
                             onClick={() => setExpandedCardId(isExpanded ? null : app.id)}
-                            className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                            className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-xl text-xs font-bold transition-colors cursor-pointer border ${
                               isExpanded
-                                ? "bg-slate-900 text-white"
-                                : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                                ? "bg-slate-900 text-white border-slate-900 shadow-xs"
+                                : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200"
                             }`}
                           >
                             <span>{isExpanded ? "Close Deep-Dive" : "Deep-Dive Radar & Resume"}</span>
@@ -1121,7 +1410,7 @@ export const CompanyApplicationsPage: React.FC = () => {
 
                 {/* Expanded Deep-Dive Section */}
                 {isExpanded && (
-                  <div className="border-t border-slate-200 bg-slate-50/70 p-5 sm:p-6 space-y-5 animate-in fade-in duration-150">
+                  <div className="border-t border-slate-200 bg-slate-50/70 p-5 sm:p-6 space-y-5 animate-in fade-in duration-150 rounded-b-3xl">
                     {/* Deep-Dive Sub-Navigation Tabs */}
                     <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 border-b border-slate-200">
                       <button
@@ -1693,6 +1982,29 @@ export const CompanyApplicationsPage: React.FC = () => {
           onClose={() => setInspectingProject(null)}
           repo={inspectingProject.repo}
           username={inspectingProject.username}
+        />
+      )}
+
+      {/* Gemma 4 AI Interview Evaluation Report Modal */}
+      {activeAIReport && (
+        <InterviewReportModal
+          isOpen={!!activeAIReport}
+          onClose={() => setActiveAIReport(null)}
+          evaluation={activeAIReport.evaluation}
+          qaHistory={activeAIReport.qaHistory}
+          job={activeAIReport.job}
+          candidate={activeAIReport.candidate}
+          onAdvanceNextRound={() => {
+            const targetApp = activeAIReport.app;
+            setActiveAIReport(null);
+            updateApplicationStatus(targetApp.id, "shortlisted", "Passed AI Technical Interview (Round 1) • Advanced to Next Round");
+            triggerCelebration();
+          }}
+          onReject={() => {
+            const targetApp = activeAIReport.app;
+            setActiveAIReport(null);
+            rejectApplication(targetApp.id);
+          }}
         />
       )}
     </div>

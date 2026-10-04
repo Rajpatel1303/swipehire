@@ -179,7 +179,9 @@ export const CandidateProfileReview: React.FC = () => {
   };
 
   const handleRemoveSkill = (skillToRemove: string) => {
-    setSkills(skills.filter((s) => s !== skillToRemove));
+    const updated = skills.filter((s) => s !== skillToRemove);
+    setSkills(updated);
+    updateCandidate({ skills: updated });
   };
 
   // Education Handlers
@@ -194,15 +196,19 @@ export const CandidateProfileReview: React.FC = () => {
       year: eduYear.trim() || new Date().getFullYear().toString(),
     };
 
+    let updatedEdu: EducationItem[];
     if (editingEduIndex !== null) {
       const copy = [...education];
       copy[editingEduIndex] = newEdu;
+      updatedEdu = copy;
       setEducation(copy);
       setEditingEduIndex(null);
     } else {
-      setEducation([...education, newEdu]);
+      updatedEdu = [...education, newEdu];
+      setEducation(updatedEdu);
       setIsAddingEdu(false);
     }
+    updateCandidate({ education: updatedEdu });
 
     setEduDegree("");
     setEduInstitution("");
@@ -220,7 +226,9 @@ export const CandidateProfileReview: React.FC = () => {
   };
 
   const handleDeleteEducation = (index: number) => {
-    setEducation(education.filter((_, i) => i !== index));
+    const updatedEdu = education.filter((_, i) => i !== index);
+    setEducation(updatedEdu);
+    updateCandidate({ education: updatedEdu });
     if (editingEduIndex === index) {
       setEditingEduIndex(null);
       setEduDegree("");
@@ -246,15 +254,19 @@ export const CandidateProfileReview: React.FC = () => {
       link: projLink.trim() || undefined,
     };
 
+    let updatedProj: ProjectItem[];
     if (editingProjIndex !== null) {
       const copy = [...projects];
       copy[editingProjIndex] = newProj;
+      updatedProj = copy;
       setProjects(copy);
       setEditingProjIndex(null);
     } else {
-      setProjects([...projects, newProj]);
+      updatedProj = [...projects, newProj];
+      setProjects(updatedProj);
       setIsAddingProj(false);
     }
+    updateCandidate({ projects: updatedProj });
 
     setProjName("");
     setProjDescription("");
@@ -274,7 +286,9 @@ export const CandidateProfileReview: React.FC = () => {
   };
 
   const handleDeleteProject = (index: number) => {
-    setProjects(projects.filter((_, i) => i !== index));
+    const updatedProj = projects.filter((_, i) => i !== index);
+    setProjects(updatedProj);
+    updateCandidate({ projects: updatedProj });
     if (editingProjIndex === index) {
       setEditingProjIndex(null);
       setProjName("");
@@ -297,15 +311,19 @@ export const CandidateProfileReview: React.FC = () => {
       description: expDescription.trim(),
     };
 
+    let updatedExp: ExperienceItem[];
     if (editingExpIndex !== null) {
       const copy = [...experience];
       copy[editingExpIndex] = newExp;
+      updatedExp = copy;
       setExperience(copy);
       setEditingExpIndex(null);
     } else {
-      setExperience([...experience, newExp]);
+      updatedExp = [...experience, newExp];
+      setExperience(updatedExp);
       setIsAddingExp(false);
     }
+    updateCandidate({ experience: updatedExp });
 
     setExpTitle("");
     setExpCompany("");
@@ -325,7 +343,9 @@ export const CandidateProfileReview: React.FC = () => {
   };
 
   const handleDeleteExperience = (index: number) => {
-    setExperience(experience.filter((_, i) => i !== index));
+    const updatedExp = experience.filter((_, i) => i !== index);
+    setExperience(updatedExp);
+    updateCandidate({ experience: updatedExp });
     if (editingExpIndex === index) {
       setEditingExpIndex(null);
       setExpTitle("");

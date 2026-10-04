@@ -12,3 +12,18 @@ const supabaseAnonKey =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6cnN3eHdlZmdpd2poYWxsanVpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2MTMxMTgsImV4cCI6MjEwMjE4OTExOH0.Bo1TfhxJEYQVAChskLm3ejTKIHl3ENcn2f6I8QIvqf8";
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
+
+export async function getAuthHeaders(extraHeaders: Record<string, string> = {}): Promise<Record<string, string>> {
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    const headers: Record<string, string> = { ...extraHeaders };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    return headers;
+  } catch (err) {
+    console.warn("[getAuthHeaders] Error retrieving session token:", err);
+    return extraHeaders;
+  }
+}
